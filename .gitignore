@@ -1,0 +1,10 @@
+node_modules/
+.validation/
+*.tar.gz
+play.html
+*.zip
+.openai/
+*.bundle
+.env
+.env.*
+!.env.example

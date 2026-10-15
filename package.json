@@ -1,0 +1,6 @@
+{
+  "name": "dugout-career",
+  "version": "0.3.0",
+  "private": true,
+  "scripts": { "test": "node --test tests/*.test.cjs", "start": "node server.cjs", "build": "node export-standalone.cjs" }
+}
