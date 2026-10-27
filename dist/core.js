@@ -241,17 +241,19 @@
   }
   function ageDevelopment(age,potential,injuryBurden=0) {
     const averageCap=Object.values(potential.caps).reduce((a,b)=>a+b,0)/5;
-    const budget=age<19?12:age<24?8:age<27?6:age<30?4:0;
+    const budget=age<19?25:age<24?22:age<27?18:age<30?14:0;
     const annualDecline=age<30?0:clamp((age-29)*0.18+Math.min(20,injuryBurden)*0.035-(potential.resilience-0.6)*1.1-Math.max(0,averageCap-75)*0.025,0,2.5);
     return {growthBudget:budget,annualDecline};
   }
   function makePotential(s, seed) {
     const r = {rng:seedValue(String(seed) + ':potential')};
-    return {caps:Object.fromEntries(ATTRS[s.role].map(a => [a.key,Math.min(99,Math.max(Math.ceil(s.attrs[a.key]),integer(r,68,99)))])),growthRate:integer(r,65,150)/100,resilience:integer(r,60,140)/100};
+    // A single hidden talent roll lets exceptional players reach 99 in every skill.
+    const ceiling=integer(r,0,99)>=65?99:integer(r,82,98);
+    return {caps:Object.fromEntries(ATTRS[s.role].map(a => [a.key,Math.max(Math.ceil(s.attrs[a.key]),ceiling)])),growthRate:integer(r,85,150)/100,resilience:integer(r,60,140)/100};
   }
   function growAttr(s,key,amount) {
     if(s.age>=30)return;
-    const gap=s.potential.caps[key]-s.attrs[key],slowdown=clamp(gap/18,0.15,1);
+    const gap=s.potential.caps[key]-s.attrs[key],slowdown=clamp(gap/12,0.6,1);
     const yearFactor=ageDevelopment(s.age,s.potential,s.injuryBurden).growthBudget/s.schedule.weekCount;
     s.attrs[key]=Math.min(s.potential.caps[key],Math.round((s.attrs[key]+amount*yearFactor*s.potential.growthRate*slowdown*(s.buffs.growth?1.5:1))*100)/100);
   }
@@ -267,6 +269,35 @@
     });
   }
   function potentialSummary(s) { return {averageCap:Math.round(Object.values(s.potential.caps).reduce((a,b)=>a+b,0)/5),growthRate:s.potential.growthRate,resilience:s.potential.resilience}; }
+  function advanceWeeks(input, planId, count=4) {
+    if(!Number.isInteger(count)||count<1||count>60)fail('진행 기간을 확인해 주세요.');
+    let s=validateSave(input), weeks=0, recoveries=0;
+    if(!PLANS[s.role].some(p=>p.id===planId))fail('훈련 계획을 확인해 주세요.');
+    const before={...s.attrs};
+    let games=0;
+    while(weeks<count&&s.phase==='active'&&!s.pendingEvent) {
+      const recover=count>1&&(s.fatigue>=60||s.injury);
+      s=advanceWeek(s,recover?'rest':planId);weeks++;if(recover)recoveries++;
+      games+=s.lastWeek.gamesPlayed;
+      // Keep the normal weekly report and save schema intact.
+    }
+    return {state:s,weeks,recoveries,games,gains:ATTRS[s.role].map(a=>({key:a.key,delta:Math.round((s.attrs[a.key]-before[a.key])*100)/100}))};
+  }
+  function careerGoal(s) {
+    const rows=s.seasons.filter(v=>v.leagueId==='mlb');
+    if(s.leagueId==='mlb'&&!rows.some(v=>v.season===s.season)&&s.week>0)
+      rows.push({season:s.season,stats:s.stats,complete:s.week===s.schedule.weekCount});
+    const complete=rows.filter(v=>v.complete===true||(v.complete!==false&&(v.season<s.season||s.week===s.schedule.weekCount)));
+    const totals=blankStats();rows.forEach(v=>addStats(totals,v.stats));
+    const qualifies=st=>st.outs>=540&&st.er*27/st.outs<=2.8&&st.so>=200||st.outs>=180&&st.sv>=40&&st.er*27/st.outs<=2;
+    if(s.role==='pitcher') {
+      const awards=complete.filter(v=>qualifies(v.stats)).map(v=>v.season);
+      const current=s.leagueId==='mlb'?s.stats:blankStats();
+      return {title:'사이영상',achieved:awards.length>0,awards,metrics:[['MLB 수상 시즌',awards.length,1],['이번 시즌 이닝',Math.floor(current.outs/3),s.pitchingRole==='starter'?180:60],s.pitchingRole==='starter'?['이번 시즌 탈삼진',current.so,200]:['이번 시즌 세이브',current.sv,40]],detail:'게임 수상 기준: MLB 한 시즌 180이닝·200탈삼진·ERA 2.80 이하 또는 60이닝·40세이브·ERA 2.00 이하. 시즌 종료 때 확정됩니다.'};
+    }
+    const eligible=complete.length>=10&&(totals.h>=3000||totals.hr>=500);
+    return {title:'미국 명예의 전당',achieved:s.phase==='retired'&&eligible,eligible,metrics:[['MLB 완료 시즌',complete.length,10],['MLB 통산 안타',totals.h,3000],['MLB 통산 홈런',totals.hr,500]],detail:'게임 입성 기준: MLB 10시즌과 통산 3,000안타 또는 500홈런. 은퇴 시 입성이 확정됩니다. 실제 투표 제도는 생략합니다.'};
+  }
   function editable(input) { const s = validateSave(input); if(s.phase !== 'active' || s.pendingEvent) fail('진행 중인 주차에서 사건 선택을 마친 뒤 이용해 주세요.'); return s; }
   function changePosition(input,id) {
     const s=editable(input); if(s.role !== 'batter' || !POSITIONS.some(v=>v.id===id)) fail('타자의 수비 위치를 확인해 주세요.');
@@ -586,5 +617,5 @@
   // Public definitions are immutable so UI code cannot change simulation rules accidentally.
   function freeze(value) { Object.values(value).forEach(v => { if (v && typeof v === 'object') freeze(v); }); return Object.freeze(value); }
   [TEAMS, STYLES, ATTRS, PLANS, LEAGUES, POSITIONS, PITCHING_ROLES, ITEMS].forEach(freeze);
-  return Object.freeze({ VERSION, TEAMS, LEAGUES, STYLES, ATTRS, PLANS, POSITIONS, PITCHING_ROLES, ITEMS, changePosition, changePitchingRole, buyItem, useItem, potentialSummary, ageDevelopment, getSeasonSchedule, getContractStatus, contractOptions, createCareer, advanceWeek, resolveEvent, nextSeason, retire, validateSave, overall, rateStats, getOutlook });
+  return Object.freeze({ VERSION, TEAMS, LEAGUES, STYLES, ATTRS, PLANS, POSITIONS, PITCHING_ROLES, ITEMS, changePosition, changePitchingRole, buyItem, useItem, potentialSummary, ageDevelopment, getSeasonSchedule, getContractStatus, contractOptions, createCareer, advanceWeek, advanceWeeks, careerGoal, resolveEvent, nextSeason, retire, validateSave, overall, rateStats, getOutlook });
 });
