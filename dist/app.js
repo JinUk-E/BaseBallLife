@@ -6,7 +6,7 @@
   const SAVE = 'dugout.career.v1';
   let state = null, view = 'home', plan = 'balanced', busy = false, storageError = false;
   let creation = { name: '', role: 'batter', style: D.STYLES.batter[0].id, entry:'highschool', leagueId: 'highschool', teamId: 'hs-seoul', position:'CF', pitchingRole:'starter' };
-  let transferLeague = 'kbo', transferTeam = '', legacyBackup = null, backupV2 = null, contractYears = 1, scheduleMonth = '';
+  let transferLeague = 'kbo', transferTeam = '', legacyBackup = null, backupV2 = null, contractYears = 1, scheduleMonth = '', postingTeam = '', postingYears = 3;
   let toastTimer;
   const paths = {
     home: '<path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1Z"/><path d="M9 21v-8h6v8"/>',
@@ -152,19 +152,28 @@
     const e = state.pendingEvent;
     return '<section class="card event-card fade-in"><div class="eyebrow">A MOMENT THAT MATTERS</div><h2>'+esc(e.title)+'</h2><p>'+esc(e.body)+'</p><div class="event-choices">'+e.choices.map(c=>'<button class="event-choice" data-event-choice="'+esc(c.id)+'"><span><strong>'+esc(c.label)+'</strong><small>'+esc(c.detail)+'</small></span>'+icon('arrow')+'</button>').join('')+'</div></section>';
   }
+  function postingCard() {
+    if(state.stage!=='pro'||!['kbo','npb'].includes(state.leagueId)||state.age>=40)return '';
+    const p=D.getPostingStatus(state);
+    if(p.offers.length&&!p.offers.some(o=>o.teamId===postingTeam))postingTeam=p.offers[0].teamId;
+    const offer=p.offers.find(o=>o.teamId===postingTeam);
+    return `<section class="card"><div class="card-head"><div><div class="card-kicker">ROAD TO THE MAJORS</div><h2>MLB 포스팅 도전</h2></div><span class="badge">${p.eligible?p.offers.length+'개 구단 관심':'조건 확인'}</span></div><div class="role-descriptions">${p.checks.map(c=>`<p><strong>${c.met?'✓':'○'}</strong> ${esc(c.label)}</p>`).join('')}</div>${offer?`<p>소속 구단이 포스팅을 승인했습니다. 제안을 수락하면 다음 시즌 MLB에 합류합니다.</p><label class="form-label" for="posting-team">관심 MLB 구단</label><select id="posting-team">${p.offers.map(o=>`<option value="${o.teamId}" ${o.teamId===postingTeam?'selected':''}>${esc(team(o.teamId).name)} · 연 ${money(o.annualSalary)}</option>`).join('')}</select><label class="form-label" for="posting-years">계약 기간</label><select id="posting-years">${offer.years.map(y=>`<option value="${y}" ${y===postingYears?'selected':''}>${y}년</option>`).join('')}</select><p class="contract-explanation">연 ${money(offer.annualSalary)} · 총 ${money(offer.annualSalary*postingYears)}</p><button class="primary full" data-posting="${offer.teamId}" data-posting-years="${postingYears}">포스팅 계약 · MLB 진출 ${icon('arrow')}</button><p class="table-note">제안을 거절하고 아래에서 현재 구단과 다음 시즌을 이어가면 성적에 따라 다시 도전할 수 있습니다.</p>`:`<p class="small muted">미충족 조건을 채워 다음 시즌에 다시 도전하세요. 해외 FA 자격을 얻었다면 아래 FA 시장에서 MLB와 직접 계약할 수 있습니다.</p>`}<p class="table-note">${esc(p.detail)}</p></section>`;
+  }
   function seasonEnd() {
     const standing=state.standings.find(t=>t.teamId===state.teamId),last=state.age>=40,c=D.getContractStatus(state);
     const header=`<section class="season-end-banner"><div class="eyebrow">${state.schedule.year} · ${stageLabel(state)} / COMPLETE</div><h2>${last?'마지막 정규시즌을 마쳤습니다.':state.stage==='highschool'&&state.age===18?'프로의 부름이 도착했습니다.':'한 시즌을, 당신의 기록으로.'}</h2><p>${esc(team(state.teamId).name)} · ${standing.w}승 ${standing.l}패 ${ties(standing)}무 · ${sortedTeams().findIndex(t=>t.teamId===state.teamId)+1}위</p><p>${state.age}세 · 종합 능력 ${D.overall(state)}${state.stage==='pro'?' · 시즌 연봉 '+money(state.salary):''}</p>${last?`<button class="primary gold" data-action="finish">커리어 마무리 ${icon('arrow')}</button>`:''}</section>`;
     if(last)return header;
+    const posting=postingCard();
     const options=D.contractOptions(state);
-    if(!c.canChooseTeam){const option=options[0];return header+`<section class="card"><div class="card-kicker">THE NEXT CHAPTER</div><h2>${esc(c.label)}</h2><p class="contract-explanation">${esc(c.detail)}</p>${option?`<div class="selected-club">${badge(option.teamId)}<div><strong>${esc(team(option.teamId).name)}</strong><small>${esc(option.reason||'')}</small></div></div><button class="primary full" data-contract="${option.teamId}" data-contract-years="1">${state.stage==='highschool'?(state.age===18?'지명 구단에 입단하기':'다음 학년으로'):'같은 팀에서 다음 시즌'} ${icon('arrow')}</button>`:''}<p class="table-note">${state.stage==='highschool'?'고교 3년 뒤 프로 지명을 받는 게임 경로입니다. 실제 고교 대회·드래프트 전체를 재현하지는 않습니다.':'연봉 갱신과 자유 이적은 다릅니다. 보류권 또는 계약 잔여 기간이 있으면 구단을 임의로 바꿀 수 없습니다.'}</p></section>`;}
+    if(!c.canChooseTeam){const option=options[0];return header+posting+`<section class="card"><div class="card-kicker">THE NEXT CHAPTER</div><h2>${esc(c.label)}</h2><p class="contract-explanation">${esc(c.detail)}</p>${option?`<div class="selected-club">${badge(option.teamId)}<div><strong>${esc(team(option.teamId).name)}</strong><small>${esc(option.reason||'')}</small></div></div><button class="primary full" data-contract="${option.teamId}" data-contract-years="1">${state.stage==='highschool'?(state.age===18?'지명 구단에 입단하기':'다음 학년으로'):'같은 팀에서 다음 시즌'} ${icon('arrow')}</button>`:''}<p class="table-note">${state.stage==='highschool'?'고교 3년 뒤 프로 지명을 받는 게임 경로입니다. 실제 고교 대회·드래프트 전체를 재현하지는 않습니다.':'연봉 갱신과 자유 이적은 다릅니다. 보류권 또는 계약 잔여 기간이 있으면 구단을 임의로 바꿀 수 없습니다.'}</p></section>`;}
     const leagues=proLeagues().filter(l=>options.some(o=>team(o.teamId).leagueId===l.id));
     if(!leagues.some(l=>l.id===transferLeague))transferLeague=leagues[0].id;
     const choices=options.filter(o=>team(o.teamId).leagueId===transferLeague);
     if(!choices.some(o=>o.teamId===transferTeam))transferTeam=choices[0].teamId;
     const option=choices.find(o=>o.teamId===transferTeam),target=team(transferTeam);
     if(!option.years.includes(contractYears))contractYears=option.years[0];
-    return header+`<section class="card"><div class="card-head"><div><div class="card-kicker">FREE AGENCY</div><h2>${esc(c.label)}</h2></div></div><p class="small muted">${esc(c.detail)}</p><button class="secondary renew-button" data-action="defer-fa">FA 행사를 유보하고 현재 팀에 1년 잔류</button><p class="table-note">자격을 보유한 채 연봉만 갱신합니다. 일본 첫 국내 FA를 유보하면 해외 FA까지 기다릴 수 있습니다.</p><div class="form-label">계약 가능한 리그</div><div class="segmented league-segment">${leagues.map(l=>`<button class="segment ${transferLeague===l.id?'selected':''}" data-transfer-league="${l.id}" aria-pressed="${transferLeague===l.id}">${l.country}<small>${l.name}</small></button>`).join('')}</div><label class="form-label" for="contract-team">협상 구단</label><select id="contract-team">${choices.map(o=>`<option value="${o.teamId}" ${transferTeam===o.teamId?'selected':''}>${esc(team(o.teamId).name)}</option>`).join('')}</select><label class="form-label" for="contract-years">계약 기간</label><select id="contract-years">${option.years.map(y=>`<option value="${y}" ${y===contractYears?'selected':''}>${y}년 계약</option>`).join('')}</select><div class="transfer-summary">${badge(target.id)}<div><strong>${esc(target.name)}</strong><p>${esc(option.reason||'계약 기간 동안 소속팀과 연봉 유지')}</p></div><button class="primary" data-contract="${target.id}" data-contract-years="${contractYears}">${contractYears}년 계약하기 ${icon('arrow')}</button></div><p class="table-note">등록·말소를 생략해 프로 완료 시즌마다 서비스 1년으로 계산합니다. FA 재취득 요건과 남은 계약 기간을 함께 확인합니다. 연봉은 공통 게임 수치입니다.</p></section>`;
+    const quote=D.getContractOffer(state,target.id,contractYears), retryQuote=D.getContractOffer(state,state.teamId,1);
+    return header+posting+`<section class="card"><div class="card-head"><div><div class="card-kicker">FREE AGENCY</div><h2>${esc(c.label)}</h2></div></div><p class="small muted">${esc(c.detail)}</p><button class="secondary renew-button" data-action="defer-fa">FA 재수 · 현재 팀에서 1년 더 도전</button><p class="table-note">1년 연봉 ${money(retryQuote.annualSalary)}. FA 권리를 보유하고 다음 시즌에 다시 협상합니다. 현재 시즌 성적이 다음 제안에 반영되므로 성적 하락 시 제안도 낮아질 수 있습니다. 일본 국내 FA를 유보하면 해외 FA도 기다릴 수 있습니다.</p><div class="form-label">계약 가능한 리그</div><div class="segmented league-segment">${leagues.map(l=>`<button class="segment ${transferLeague===l.id?'selected':''}" data-transfer-league="${l.id}" aria-pressed="${transferLeague===l.id}">${l.country}<small>${l.name}</small></button>`).join('')}</div><label class="form-label" for="contract-team">협상 구단</label><select id="contract-team">${choices.map(o=>`<option value="${o.teamId}" ${transferTeam===o.teamId?'selected':''}>${esc(team(o.teamId).name)}</option>`).join('')}</select><label class="form-label" for="contract-years">계약 기간</label><select id="contract-years">${option.years.map(y=>`<option value="${y}" ${y===contractYears?'selected':''}>${y}년 계약</option>`).join('')}</select><div class="transfer-summary">${badge(target.id)}<div><strong>${esc(target.name)}</strong><p>${esc(option.reason||'계약 기간 동안 소속팀과 연봉 유지')}</p><p>연 ${money(quote.annualSalary)} · ${contractYears}년 총 ${money(quote.total)}</p></div><button class="primary" data-contract="${target.id}" data-contract-years="${contractYears}">${contractYears}년 계약하기 ${icon('arrow')}</button></div><p class="table-note">등록·말소를 생략해 프로 완료 시즌마다 서비스 1년으로 계산합니다. FA 재취득 요건과 남은 계약 기간을 함께 확인합니다. 연봉은 공통 게임 수치입니다.</p></section>`;
   }
   function home() {
     const weeks=state.schedule.weekCount;
@@ -209,7 +218,7 @@
   }
   function closeDialog() { document.getElementById('dialog').close(); }
   function guide() {
-    showDialog('한 선수의 야구 인생',`<p>고교 16세 또는 프로 19세로 시작해 40세 시즌까지 이어갑니다. 훈련을 고르고 4주씩 또는 다음 주요 선택까지 빠르게 진행하세요. 빠른 진행 중에는 자동으로 회복하며 사건 선택과 계약에서는 멈춥니다.</p><ul><li><strong>성장기:</strong> 어린 선수일수록 빠르게 성장하고 높은 능력에 도달하면 성장이 완만해집니다. 30세부터 훈련은 유지에 집중하며 회복력·누적 부상에 따라 노화가 달라집니다.</li><li><strong>부상:</strong> 발생할 때 관련 능력만 소폭 감소합니다. 부상 중 매주 반복해 깎지 않습니다. 피로는 경기력과 부상 위험에 영향을 줍니다.</li><li><strong>고교:</strong> 가상 8개교·주말 중심 28경기를 3년 진행합니다. 프로 지명 구단에 입단하며 고교 기록은 프로 통산과 분리됩니다.</li><li><strong>계약:</strong> FA 전에는 소속팀에 보류권이 있습니다. 프로 완료 시즌을 서비스 1년으로 간주합니다. KBO 고졸 첫 FA 8시즌, NPB 국내 8·해외 9, MLB 6을 적용합니다. KBO·NPB에서 FA를 행사하면 재취득 기간도 필요합니다.</li><li><strong>다년 계약:</strong> FA 때 1~4년을 선택합니다. 계약이 남아 있으면 팀과 연봉을 유지합니다. MLB 3시즌 이후에는 연봉 조정 단계를 반영합니다.</li><li><strong>선수 관리:</strong> 포지션 변경은 주간 1회입니다. 매주 12 P를 받아 아이템을 구매하고, 주간 1개 사용합니다.</li><li><strong>일정:</strong> 기본 규모는 KBO 144·NPB 143·MLB 162경기입니다. 2026 MLB의 최종 취소 경기로 두 팀은 실제 161경기를 반영합니다. 기준 자료와 실제 대진 적용 여부는 일정·순위 화면에서 확인하세요. 미래 시즌은 기준 일정을 활용해 생성합니다.</li></ul><p>로스터 이동·외국인 제한·보상선수·포스팅·트레이드·포스트시즌은 생략했습니다. 연봉과 성적은 게임 수치입니다. 기존 저장은 진행 중인 시즌의 기록과 일정을 보존해 전환합니다.</p><button class="secondary full" data-action="roadmap">국제대회 개발 계획</button><button class="primary full" data-action="close-dialog">준비됐어요 ${icon('arrow')}</button>`);
+    showDialog('한 선수의 야구 인생',`<p>고교 16세 또는 프로 19세로 시작해 40세 시즌까지 이어갑니다. 훈련을 고르고 4주씩 또는 다음 주요 선택까지 빠르게 진행하세요. 빠른 진행 중에는 자동으로 회복하며 사건 선택과 계약에서는 멈춥니다.</p><ul><li><strong>성장기:</strong> 어린 선수일수록 빠르게 성장하고 높은 능력에 도달하면 성장이 완만해집니다. 30세부터 훈련은 유지에 집중하며 회복력·누적 부상에 따라 노화가 달라집니다.</li><li><strong>부상:</strong> 발생할 때 관련 능력만 소폭 감소합니다. 부상 중 매주 반복해 깎지 않습니다. 피로는 경기력과 부상 위험에 영향을 줍니다.</li><li><strong>고교:</strong> 가상 8개교·주말 중심 28경기를 3년 진행합니다. 프로 지명 구단에 입단하며 고교 기록은 프로 통산과 분리됩니다.</li><li><strong>계약:</strong> FA 전에는 소속팀에 보류권이 있습니다. 프로 완료 시즌을 서비스 1년으로 간주합니다. KBO 고졸 첫 FA 8시즌, NPB 국내 8·해외 9, MLB 6을 적용합니다. KBO·NPB에서 FA를 행사하면 재취득 기간도 필요합니다.</li><li><strong>MLB 포스팅:</strong> 시즌 종료 후 경력·성적·신뢰 조건을 충족하면 MLB 제안을 받습니다. 게임 조건은 포스팅 화면에 표시합니다.</li><li><strong>FA 재수:</strong> 제안이 아쉬우면 현재 팀에서 1년 더 뛰고 FA 권리를 유지한 채 다시 협상하세요. 다음 시즌 성적에 따라 제안이 오르거나 낮아집니다.</li><li><strong>다년 계약:</strong> FA 때 1~4년을 선택합니다. 계약이 남아 있으면 팀과 연봉을 유지합니다. MLB 3시즌 이후에는 연봉 조정 단계를 반영합니다.</li><li><strong>선수 관리:</strong> 포지션 변경은 주간 1회입니다. 매주 12 P를 받아 아이템을 구매하고, 주간 1개 사용합니다.</li><li><strong>일정:</strong> 기본 규모는 KBO 144·NPB 143·MLB 162경기입니다. 2026 MLB의 최종 취소 경기로 두 팀은 실제 161경기를 반영합니다. 기준 자료와 실제 대진 적용 여부는 일정·순위 화면에서 확인하세요. 미래 시즌은 기준 일정을 활용해 생성합니다.</li></ul><p>로스터 이동·외국인 제한·보상선수·트레이드·포스트시즌은 생략했습니다. 연봉과 성적은 게임 수치입니다. 기존 저장은 진행 중인 시즌의 기록과 일정을 보존해 전환합니다.</p><button class="secondary full" data-action="roadmap">국제대회 개발 계획</button><button class="primary full" data-action="close-dialog">준비됐어요 ${icon('arrow')}</button>`);
   }
   function roadmap() {
     const items=window.DugoutScheduleData?.INTERNATIONAL_ROADMAP||[];
@@ -232,6 +241,8 @@
     if(e.target.id==='creation-position'){if(creation.role==='batter')creation.position=e.target.value;else creation.pitchingRole=e.target.value;}
     if(e.target.id==='team-select'){creation.teamId=e.target.value;render();}
     if(e.target.id==='contract-team'){transferTeam=e.target.value;render();}
+    if(e.target.id==='posting-team'){postingTeam=e.target.value;render();}
+    if(e.target.id==='posting-years'){postingYears=Number(e.target.value);render();}
     if(e.target.id==='contract-years'){contractYears=Number(e.target.value);render();}
     if(e.target.id==='schedule-month'){scheduleMonth=e.target.value;render();}
   });
@@ -253,6 +264,7 @@
       if(el.dataset.club){creation.teamId=el.dataset.club;render();return;}
       if(el.dataset.plan){plan=el.dataset.plan;render();return;}
       if(el.dataset.eventChoice){commit(D.resolveEvent(state,el.dataset.eventChoice));toast('선택이 커리어에 반영됐습니다.');return;}
+      if(el.dataset.posting){plan='balanced';scheduleMonth='';commit(D.nextSeason(state,el.dataset.posting,Number(el.dataset.postingYears),false,'posting'));scrollTop();toast('포스팅 계약 완료! MLB에서 새 시즌을 시작합니다.');return;}
       if(el.dataset.contract){plan='balanced';scheduleMonth='';commit(D.nextSeason(state,el.dataset.contract,Number(el.dataset.contractYears||1)));scrollTop();toast(state.stage==='highschool'?'새 학년이 시작됐습니다.':'새 시즌을 시작합니다. 연봉 '+money(state.salary));return;}
       switch(el.dataset.action){
         case 'advance-one':case 'advance-key':case 'advance': {
@@ -262,7 +274,7 @@
           } finally {busy=false;render();}
           if(state.pendingEvent||state.phase==='seasonEnd')scrollTop();break;
         }
-        case 'defer-fa':plan='balanced';scheduleMonth='';commit(D.nextSeason(state,state.teamId,1,true));scrollTop();toast('FA 권리를 보유한 채 현재 팀에 1년 잔류합니다.');break;
+        case 'defer-fa':plan='balanced';scheduleMonth='';commit(D.nextSeason(state,state.teamId,1,true));scrollTop();toast('FA 재수 시작! 1년 뒤 새 성적으로 다시 협상합니다.');break;
         case 'finish':commit(D.nextSeason(state,state.teamId));scrollTop();break;
         case 'change-position':{const selected=document.getElementById('role-select').value;commit(state.role==='batter'?D.changePosition(state,selected):D.changePitchingRole(state,selected));toast('새 역할을 선택했습니다. 출전 전망을 확인하세요.');break;}
         case 'export-legacy':{const v=el.dataset.backupVersion||'1',raw=v==='2'?backupV2:legacyBackup;if(raw){const url=URL.createObjectURL(new Blob([raw],{type:'application/json'}));const a=document.createElement('a');a.href=url;a.download='dugout-original-v'+v+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}break;}
