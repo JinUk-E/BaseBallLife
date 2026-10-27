@@ -1,6 +1,13 @@
 'use strict';
 const test=require('node:test'),assert=require('node:assert/strict'),D=require('../dist/core.js');
 const copy=s=>JSON.parse(JSON.stringify(s));
+function renderApp(saved) {
+  const vm=require('node:vm'),fs=require('node:fs'),elements=new Map(),events={};
+  const storage=new Map([['dugout.career.v1',JSON.stringify(saved)]]);
+  const document={getElementById(id){if(!elements.has(id))elements.set(id,{innerHTML:'',textContent:'',classList:{toggle(){},add(){},remove(){}},addEventListener(){}});return elements.get(id);},querySelectorAll(){return [];},addEventListener(type,fn){events[type]=fn;}};
+  vm.runInNewContext(fs.readFileSync(require.resolve('../dist/app.js'),'utf8'),{window:{Dugout:D,scrollTo(){}},document,localStorage:{getItem:k=>storage.get(k)||null,setItem:(k,v)=>storage.set(k,v)},JSON,setTimeout(){return 1;},clearTimeout(){},matchMedia(){return {matches:true};}});
+  return {html:()=>elements.get('main').innerHTML,saved:()=>D.validateSave(JSON.parse(storage.get('dugout.career.v1'))),click:dataset=>events.click({target:{closest:()=>({dataset,disabled:false})}})};
+}
 function create(leagueId='kbo',role='batter') {
   const s=D.createCareer({name:'시장 검증',role,seed:11,entry:'pro',leagueId,teamId:D.TEAMS.find(t=>t.leagueId===leagueId).id});
   for(const a of D.ATTRS[role]){s.potential.caps[a.key]=99;s.attrs[a.key]=99;}
@@ -66,4 +73,14 @@ test('시장 제안은 현재 시즌 성적에 따라 오르내리고 조회로 
   const s=atYear('kbo',8),bad=copy(s);bad.stats={...bad.stats,h:30,doubles:0,triples:0,hr:0,bb:0};
   const good=D.getContractOffer(s,s.teamId,1),poor=D.getContractOffer(bad,bad.teamId,1);
   assert.ok(good.annualSalary>poor.annualSalary);assert.deepEqual(good,D.getContractOffer(s,s.teamId,1));
+});
+test('계약 화면은 제안 금액을 표시하고 포스팅·FA 재수 버튼이 실제 저장에 반영된다',async()=>{
+  const posting=atYear('kbo',7),offer=D.getPostingStatus(posting).offers[0],ui=renderApp(posting);
+  assert.match(ui.html(),/MLB 포스팅 도전/);assert.match(ui.html(),/data-posting=/);
+  assert.ok(!ui.html().includes('FA 재수 · 현재 팀에서 1년 더 도전'));
+  await ui.click({posting:offer.teamId,postingYears:'3'});
+  assert.equal(ui.saved().leagueId,'mlb');assert.equal(ui.saved().salary,offer.annualSalary);
+  const fa=atYear('kbo',8),retry=renderApp(fa);assert.match(retry.html(),/FA 재수 · 현재 팀에서 1년 더 도전/);
+  assert.match(retry.html(),/년 총/);await retry.click({action:'defer-fa'});
+  assert.equal(retry.saved().contract.faService.kbo,null);assert.equal(retry.saved().contract.yearsLeft,1);
 });
