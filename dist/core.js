@@ -602,7 +602,7 @@
     if(!weekEvent(s)) s.buffs.growth=Math.max(0,s.buffs.growth-1);
     s.buffs.protection=Math.max(0,s.buffs.protection-1);
     s.usedItems=[]; s.roleChangedWeek=false;
-    const summary = [team(s.teamId).short + ' ' + wins + '승 ' + games.filter(g=>g.result==='L').length + '패 ' + games.filter(g=>g.result==='D').length + '무', s.role === 'batter' ? weekly.g + '경기 출전 · ' + weekly.h + '안타 · ' + weekly.hr + '홈런' : weekly.g + '경기 등판 · ' + weekly.starts + '선발 · ' + rateStats(weekly, s.role).ip + '이닝 · ' + weekly.so + '삼진'];
+    const summary = [(s.stage==='highschool'?getSchoolName(s.teamId,s.schoolCountry):team(s.teamId).short) + ' ' + wins + '승 ' + games.filter(g=>g.result==='L').length + '패 ' + games.filter(g=>g.result==='D').length + '무', s.role === 'batter' ? weekly.g + '경기 출전 · ' + weekly.h + '안타 · ' + weekly.hr + '홈런' : weekly.g + '경기 등판 · ' + weekly.starts + '선발 · ' + rateStats(weekly, s.role).ip + '이닝 · ' + weekly.so + '삼진'];
     if(missed) summary.push(newInjury ? '부상 발생: 이번 주 경기를 쉬며 회복했습니다. 능력 감소를 확인하세요.' : '재활 주간: 출전 없이 훈련 효과 25%로 회복했습니다.');
     if (!weekly.g) summary.push('출전하지 못해도 훈련과 신뢰는 쌓입니다. 회복 후 다음 기회를 준비하세요.');
     if (s.fatigue >= 65) summary.push('피로 경고: 회복 주간으로 컨디션을 관리하세요.');

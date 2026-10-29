@@ -8,7 +8,7 @@ test('한국·미국·일본의 가상 고교가 각국 프로로 이어지고 �
  for(const [schoolCountry,target] of [['kr','kbo'],['us','mlb'],['jp','npb']]){
   let s=create({schoolCountry,favoriteTeamId:'kbo-lg'});assert.equal(s.age,16);assert.equal(s.schoolCountry,schoolCountry);
   assert.ok(D.getSchoolName(s.teamId,schoolCountry));assert.match(s.history[0].text,new RegExp(D.getSchoolName(s.teamId,schoolCountry)));
-  for(let year=0;year<3;year++){s=finish(s);D.validateSave(copy(s));s=D.nextSeason(s,D.contractOptions(s)[0].teamId);}
+  for(let year=0;year<3;year++){s=finish(s);assert.ok(s.lastWeek.summary[0].startsWith(D.getSchoolName(s.teamId,schoolCountry)));D.validateSave(copy(s));s=D.nextSeason(s,D.contractOptions(s)[0].teamId);}
   assert.equal(s.age,19);assert.equal(s.leagueId,target);assert.equal(s.careerStats.g,0);assert.ok(s.schoolStats.g>0);
   assert.equal(s.favoriteTeamId,'kbo-lg');D.validateSave(s);
  }
