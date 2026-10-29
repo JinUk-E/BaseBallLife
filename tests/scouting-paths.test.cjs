@@ -71,6 +71,8 @@ test('새 시작 화면에 국가·선호 구단·10개 KBO 테마가 있으며 
  assert.match(elements.get('main').innerHTML,/고교 시작 국가/);assert.match(elements.get('main').innerHTML,/선호 구단/);
  events.change({target:{id:'theme-select',value:'kbo-lg'}});assert.equal(store.get('dugout.theme.v1'),'kbo-lg');assert.equal(style['--green'],'#70182f');
  await events.click({target:{closest:()=>({dataset:{schoolCountry:'us'}})}});assert.match(elements.get('main').innerHTML,/캘리포니아 선셋고/);
+ store.set('dugout.career.v1',JSON.stringify(create({schoolCountry:'us',favoriteTeamId:'kbo-lg'})));vm.runInNewContext(source,context());
+ assert.match(elements.get('main').innerHTML,/MLB에서 쓰는 나의 이야기/);assert.match(elements.get('main').innerHTML,/선호 구단 · LG 트윈스/);
  const fa=freeAgent();store.set('dugout.career.v1',JSON.stringify(fa));vm.runInNewContext(source,context());
  const foreign=D.contractOptions(fa).find(o=>o.teamId!==fa.teamId);await events.click({target:{closest:()=>({dataset:{declineOffer:foreign.teamId}})}});
  const saved=D.validateSave(JSON.parse(store.get('dugout.career.v1')));assert.ok(saved.scouting.declined.includes(foreign.teamId));
