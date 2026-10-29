@@ -25,3 +25,5 @@ select{display:block;width:100%;min-width:0;border:1px solid var(--line);backgro
 
 .ending-row{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:16px 0;border-bottom:1px solid var(--line)}.ending-row>span{font-size:12px;color:var(--muted)}.retirement-request p{margin:12px 0}.age-stages{grid-template-columns:repeat(5,minmax(0,1fr))}@media(max-width:700px){.age-stages{grid-template-columns:repeat(2,minmax(0,1fr))}.ending-row{align-items:flex-start;flex-direction:column;gap:4px}}
 .retired-actions{align-items:center}.retired-actions .primary{margin-top:0}.retired-actions .secondary{color:var(--green);background:#fff;border-color:#fff}
+
+.creation-preferences{margin:18px 0}.creation-preferences summary{cursor:pointer;font-weight:700}.scout-actions{display:flex;flex-wrap:wrap;gap:9px;margin-top:14px}.scouting-card p{margin-top:8px}.transfer-summary{flex-wrap:wrap}

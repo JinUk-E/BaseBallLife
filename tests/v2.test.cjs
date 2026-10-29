@@ -291,7 +291,10 @@ test('Contract_InternationalTransfer_ResetsLeagueAndPreservesCareerRecords', () 
   let s = finishSeason(career());
   while(!core.contractOptions(s).some(o=>data.TEAMS.find(t=>t.id===o.teamId).leagueId==='npb'))s=finishSeason(core.nextSeason(s,s.teamId));
   for (const leagueId of ['npb', 'mlb']) {
-    const team = data.TEAMS.find(t => t.leagueId === leagueId);
+    while(!core.contractOptions(s).some(o=>data.TEAMS.find(t=>t.id===o.teamId).leagueId===leagueId)&&s.age<39)s=finishSeason(core.nextSeason(s,s.teamId));
+    const offer=core.contractOptions(s).find(o=>data.TEAMS.find(t=>t.id===o.teamId).leagueId===leagueId);
+    assert.ok(offer,'no international offer before retirement');
+    const team = data.TEAMS.find(t => t.id === offer.teamId);
     const total = copy(s.careerStats), potential = copy(s.potential);
     s = core.nextSeason(s, team.id);
     assert.equal(s.leagueId, leagueId);

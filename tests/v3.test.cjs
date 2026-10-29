@@ -110,7 +110,7 @@ test('Contracts_ReservedServiceAndMultiYearFA_EnforceLeagueRulesAndKeepSalary',(
         assert.ok(options.length>1);
         assert.equal(core.getContractStatus(s).faEligible,true);
         if(leagueId==='npb')assert.ok(options.every(o=>core.TEAMS.find(t=>t.id===o.teamId).leagueId==='npb'));
-        else assert.ok(options.some(o=>o.teamId===foreign));
+        else assert.ok(options.length<core.TEAMS.filter(t=>t.leagueId!=='highschool').length,'FA must contain actual offers rather than every team');
       }
     }
     const faTeam=core.contractOptions(s).find(o=>o.teamId!==own).teamId;
