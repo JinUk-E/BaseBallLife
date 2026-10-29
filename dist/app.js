@@ -264,7 +264,7 @@
       if(el.dataset.league){creation.leagueId=el.dataset.league;creation.teamId=leagueTeams(creation.leagueId)[0].id;render();return;}
       if(el.dataset.transferLeague){transferLeague=el.dataset.transferLeague;transferTeam=leagueTeams(transferLeague)[0].id;render();return;}
       if(el.dataset.buyItem){commit(D.buyItem(state,el.dataset.buyItem));toast('아이템을 구매했습니다. 사용 버튼으로 적용하세요.');return;}
-      if(el.dataset.buyLife){const item=D.LIFE_ITEMS.find(i=>i.id===el.dataset.buyLife);commit(D.buyLifeItem(state,el.dataset.buyLife));toast(item.name+'을(를) 마련했습니다.');return;}
+      if(el.dataset.buyLife){const item=D.LIFE_ITEMS.find(i=>i.id===el.dataset.buyLife);commit(D.buyLifeItem(state,el.dataset.buyLife));toast(item.name+' 구매 완료');return;}
       if(el.dataset.useItem){commit(D.useItem(state,el.dataset.useItem));toast('아이템 효과를 적용했습니다.');return;}
       if(el.dataset.role){creation.role=el.dataset.role;creation.style=D.STYLES[creation.role][0].id;render();return;}
       if(el.dataset.style){creation.style=el.dataset.style;render();return;}
