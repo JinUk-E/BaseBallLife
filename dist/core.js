@@ -28,6 +28,55 @@
     {id:'growth',name:'성장 훈련권',description:'3주 성장 +50% · 30세 이후 노화 감소 35%',price:45,effect:'성장·유지 보조 / 3주'},
     {id:'protection',name:'보호 장비',description:'다음 3주 부상 확률 65% 감소',price:35,effect:'부상 위험 ×0.35 / 3주'}
   ];
+  const LIFE_ITEMS = [
+    ['bat','맞춤 배트','training',30,'손에 맞춰 제작한 나만의 배트.'],
+    ['glove','수제 글러브','training',60,'오래 길들여 함께할 가죽 글러브.'],
+    ['shoes','맞춤 스파이크','training',45,'발 모양을 본떠 만든 경기용 스파이크.'],
+    ['machine','개인 훈련 머신','training',400,'집에서도 사용할 수 있는 전문 훈련 장비.'],
+    ['gym','홈 트레이닝 세트','training',180,'운동 공간을 채울 웨이트 장비.'],
+    ['camera','동작 분석 카메라','training',120,'자신의 동작을 남기는 고속 촬영 카메라.'],
+    ['headphones','프리미엄 헤드폰','luxury',40,'원정길에 좋아하는 음악과 함께.'],
+    ['suit','맞춤 정장','luxury',150,'행사와 특별한 날을 위한 한 벌.'],
+    ['watch','명품 시계','luxury',1200,'첫 큰 계약을 기념하는 손목시계.'],
+    ['car','스포츠카','luxury',15000,'한번쯤 꿈꾸던 드림카.'],
+    ['audio','하이엔드 오디오','luxury',800,'거실을 작은 공연장으로 바꾸는 취향.'],
+    ['art','미술 작품','luxury',3000,'마음에 들어 오래 바라보고 싶은 작품.'],
+    ['studio','작은 오피스텔','home',8000,'처음으로 마련하는 나만의 공간.'],
+    ['apartment','도심 아파트','home',35000,'원정에서 돌아오면 기다리는 보금자리.'],
+    ['garden','마당 있는 집','home',60000,'햇볕과 작은 정원이 있는 주택.'],
+    ['vacation','바닷가 별장','home',90000,'시즌이 끝나면 찾아갈 바닷가의 집.'],
+    ['penthouse','펜트하우스','home',180000,'도시의 야경이 내려다보이는 집.'],
+    ['villa','개인 훈련장 주택','home',250000,'넓은 운동 공간을 갖춘 오랜 꿈의 집.']
+  ].map(([id,name,category,price,description])=>({id,name,category,price,description}));
+  function lifeEffects(s) {
+    const effects={growth:1,recovery:0,morale:0};
+    for(const owned of s.life.owned){
+      const item=LIFE_ITEMS.find(i=>i.id===owned.id),q=owned.quality/100;
+      if(item.category==='training')effects.growth+=.015+q*.035;
+      if(item.category==='home')effects.recovery+=.2+q*.5;
+      if(item.category==='luxury')effects.morale+=.1+q*.25;
+    }
+    effects.growth=Math.min(1.25,effects.growth);effects.recovery=Math.min(3,effects.recovery);effects.morale=Math.min(2,effects.morale);
+    return effects;
+  }
+  function getLifeShop(s) {
+    const owned=new Set(s.life.owned.map(i=>i.id));
+    const offers=['training','luxury','home'].flatMap(category=>LIFE_ITEMS.filter(i=>i.category===category&&!owned.has(i.id))
+      .sort((a,b)=>seedValue(s.id+':shop:'+s.season+':'+s.week+':'+a.id)-seedValue(s.id+':shop:'+s.season+':'+s.week+':'+b.id)).slice(0,2));
+    return {balance:Math.max(0,Math.floor(s.totalSalary)-s.life.spent),spent:s.life.spent,offers:clone(offers),owned:s.life.owned.map(o=>({...LIFE_ITEMS.find(i=>i.id===o.id),season:o.season,week:o.week}))};
+  }
+  function buyLifeItem(input,id) {
+    const s=validateSave(input);
+    if(s.stage!=='pro'||s.phase==='retired')fail('프로 선수로 활동 중일 때 구매할 수 있습니다.');
+    if(s.life.owned.some(o=>o.id===id))fail('이미 보유한 물건입니다.');
+    const shop=getLifeShop(s),item=shop.offers.find(i=>i.id===id);
+    if(!item)fail('현재 진열된 물건을 선택해 주세요.');
+    if(shop.balance<item.price)fail('보유한 돈이 부족합니다.');
+    s.life.owned.push({id,price:item.price,season:s.season,week:s.week,quality:1+seedValue(s.id+':life:'+id)%100});
+    s.life.spent+=item.price;
+    log(s,'새로운 일상',item.name+' 구입 · '+item.price.toLocaleString('ko-KR')+'만 원','career');
+    return s;
+  }
   const POSITION_WEIGHTS = {C:[.15,.1,.15,.05,.55],'1B':[.3,.4,.15,.05,.1],'2B':[.2,.05,.1,.25,.4],'3B':[.2,.3,.1,.05,.35],SS:[.15,.05,.1,.25,.45],LF:[.3,.3,.15,.1,.15],CF:[.15,.1,.1,.3,.35],RF:[.2,.3,.1,.1,.3],DH:[.4,.4,.2,0,0]};
   const PITCH_WEIGHTS = {starter:[.18,.22,.2,.25,.15],reliever:[.3,.2,.25,.05,.2],closer:[.3,.2,.15,.05,.3]};
   const STYLES = {
@@ -67,7 +116,7 @@
     ]
   };
   const STAT_KEYS = 'ab h doubles triples hr bb hbp sf rbi r sb cs so g pa starts outs ha er ra w l sv hld'.split(' ');
-  const STATE_KEYS = 'version id rng name role style teamId age season week phase attrs fatigue morale trust salary totalSalary stats careerStats seasons lastWeek history standings pendingEvent leagueId scheduleTeamIds potential position pitchingRole points inventory buffs injury usedItems roleChangedWeek startAge stage schoolStats schedule contract injuryBurden injurySeasonLoss agingCarry draftTeamId'.split(' ');
+  const STATE_KEYS = 'version id rng name role style teamId age season week phase attrs fatigue morale trust salary totalSalary stats careerStats seasons lastWeek history standings pendingEvent leagueId scheduleTeamIds potential position pitchingRole points inventory buffs injury usedItems roleChangedWeek startAge stage schoolStats schedule contract injuryBurden injurySeasonLoss agingCarry draftTeamId life'.split(' ');
   const clamp = (n, lo, hi) => Math.max(lo, Math.min(hi, n));
   const clone = value => JSON.parse(JSON.stringify(value));
   const team = id => TEAMS.find(t => t.id === id);
@@ -145,6 +194,7 @@
     if (style === 'movement') s.attrs.composure += 5;
     if (options.leagueId && options.leagueId !== s.leagueId) fail('리그와 구단을 확인해 주세요.');
     if (role === 'batter' ? !POSITIONS.some(v => v.id === s.position) : !PITCHING_ROLES.some(v => v.id === s.pitchingRole)) fail('수비 위치 / 투수 역할을 확인해 주세요.');
+    s.life={owned:[],spent:0};
     s.potential = makePotential(s, s.rng); s.standings = blankStandings(s.scheduleTeamIds);
     s.agingCarry=Object.fromEntries(ATTRS[role].map(a=>[a.key,0])); s.schedule=makeSchedule(s); if(s.stage==='pro') s.contract=newContract(s,1); s.salary=s.contract?s.contract.annualSalary:0;
     log(s, s.stage==='highschool'?'고교 야구의 첫 페이지':'프로의 첫 페이지', team(teamId).name + '에서 ' + s.age + '세 선수의 시즌이 시작됩니다.', 'career');
@@ -286,7 +336,7 @@
     if(s.age>=30)return;
     const gap=s.potential.caps[key]-s.attrs[key],slowdown=clamp(gap/12,0.6,1);
     const yearFactor=ageDevelopment(s.age,s.potential,s.injuryBurden).growthBudget/s.schedule.weekCount;
-    s.attrs[key]=Math.min(s.potential.caps[key],Math.round((s.attrs[key]+amount*yearFactor*s.potential.growthRate*slowdown*(s.buffs.growth?1.5:1))*100)/100);
+    s.attrs[key]=Math.min(s.potential.caps[key],Math.round((s.attrs[key]+amount*yearFactor*s.potential.growthRate*slowdown*(s.buffs.growth?1.5:1)*lifeEffects(s).growth)*100)/100);
   }
   function applyAging(s,plan) {
     const annual=ageDevelopment(s.age,s.potential,s.injuryBurden).annualDecline;
@@ -508,6 +558,9 @@
     const wins = games.filter(g => g.result === 'W').length;
     s.morale = Math.round(clamp(s.morale + (wins - games.length/2) * 0.8 + performance * 0.3, 0, 100) * 10) / 10;
     s.totalSalary += s.salary / s.schedule.weekCount; s.points += 12;
+    const lifestyle=lifeEffects(s);
+    s.fatigue=Math.round(clamp(s.fatigue-lifestyle.recovery,0,100)*100)/100;
+    s.morale=Math.round(clamp(s.morale+lifestyle.morale,0,100)*100)/100;
     if(missed) {s.fatigue=clamp(s.fatigue-14,0,100); if(--s.injury.weeks<=0) s.injury=null;}
     // An event belongs to the week just simulated, including its growth bonus.
     if(!weekEvent(s)) s.buffs.growth=Math.max(0,s.buffs.growth-1);
@@ -683,6 +736,7 @@
   }
   function validateSave(input) {
     if(input&&(input.version===1||input.version===2))input=migrateLegacy(input);
+    if(input&&input.version===VERSION&&!Object.hasOwn(input,'life'))input={...input,life:{owned:[],spent:0}};
     const err=label=>fail('저장 데이터가 올바르지 않습니다: '+label);
     const object=(v,keys,label)=>{if(!v||typeof v!=='object'||Array.isArray(v)||![Object.prototype,null].includes(Object.getPrototypeOf(v)))err(label);const actual=Object.keys(v);if(actual.length!==keys.length||keys.some(k=>!Object.hasOwn(v,k)))err(label+' 필드');};
     const number=(n,lo,hi,label,integral=false)=>{if(typeof n!=='number'||!Number.isFinite(n)||n<lo||n>hi||(integral&&!Number.isInteger(n)))err(label);};
@@ -710,6 +764,17 @@
     attrKeys.forEach(k=>{number(s.potential.caps[k],1,99,'잠재력 상한',true);number(s.attrs[k],1,s.potential.caps[k],'능력');});number(s.potential.growthRate,.65,1.5,'성장 속도');number(s.potential.resilience,.6,1.4,'회복력');
     object(s.agingCarry,attrKeys,'노화 누적');attrKeys.forEach(k=>number(s.agingCarry[k],0,.011,'노화 잔여량'));number(s.injuryBurden,0,2000,'누적 부상',true);number(s.injurySeasonLoss,0,2.000001,'시즌 부상 손실');
     ['fatigue','morale','trust'].forEach(k=>number(s[k],0,100,k));number(s.points,0,100000,'포인트',true);number(s.salary,0,1000000,'연봉');number(s.totalSalary,0,100000000,'누적 보수');
+    object(s.life,['owned','spent'],'생활 자산');array(s.life.owned,LIFE_ITEMS.length,'보유 물품');
+    let lifeSpent=0;const lifeIds=new Set();
+    for(const o of s.life.owned){
+      object(o,['id','price','season','week','quality'],'구매 내역');const item=LIFE_ITEMS.find(i=>i.id===o.id);
+      if(!item||lifeIds.has(o.id)||o.price!==item.price)err('구매 물품');lifeIds.add(o.id);lifeSpent+=o.price;
+      number(o.season,1,s.season,'구매 시즌',true);number(o.week,0,60,'구매 주차',true);
+      number(o.quality,1,100,'물품 상태',true);
+      if(o.quality!==1+seedValue(s.id+':life:'+o.id)%100)err('물품 상태');
+      if(o.season===s.season&&o.week>s.week||s.startAge+o.season-1<19)err('구매 시점');
+    }
+    number(s.life.spent,0,Math.floor(s.totalSalary),'지출',true);if(s.life.spent!==lifeSpent)err('지출 합계');
     object(s.inventory,ITEMS.map(v=>v.id),'보관함');ITEMS.forEach(v=>number(s.inventory[v.id],0,99,'아이템 수',true));object(s.buffs,['growth','protection'],'효과');['growth','protection'].forEach(k=>number(s.buffs[k],0,3,'효과 남은 주',true));
     if(s.injury!==null){object(s.injury,['name','weeks'],'부상');if(s.injury.name!=='근육 피로 부상')err('부상 종류');number(s.injury.weeks,1,3,'부상 남은 주',true);}
     array(s.usedItems,1,'사용 아이템');if(s.usedItems.some(id=>!ITEMS.some(v=>v.id===id)))err('사용 아이템');if(typeof s.roleChangedWeek!=='boolean')err('보직 변경 상태');
@@ -757,6 +822,6 @@
   }
   // Public definitions are immutable so UI code cannot change simulation rules accidentally.
   function freeze(value) { Object.values(value).forEach(v => { if (v && typeof v === 'object') freeze(v); }); return Object.freeze(value); }
-  [TEAMS, STYLES, ATTRS, PLANS, LEAGUES, POSITIONS, PITCHING_ROLES, ITEMS].forEach(freeze);
-  return Object.freeze({ VERSION, TEAMS, LEAGUES, STYLES, ATTRS, PLANS, POSITIONS, PITCHING_ROLES, ITEMS, changePosition, changePitchingRole, buyItem, useItem, potentialSummary, ageDevelopment, getLeagueRules, getSeasonSchedule, getContractStatus, getContractOffer, getPostingStatus, contractOptions, createCareer, advanceWeek, advanceWeeks, careerGoal, resolveEvent, nextSeason, retire, validateSave, overall, rateStats, getOutlook });
+  [TEAMS, STYLES, ATTRS, PLANS, LEAGUES, POSITIONS, PITCHING_ROLES, ITEMS,LIFE_ITEMS].forEach(freeze);
+  return Object.freeze({ VERSION, TEAMS, LEAGUES, STYLES, ATTRS, PLANS, POSITIONS, PITCHING_ROLES, ITEMS, LIFE_ITEMS, getLifeShop, buyLifeItem, changePosition, changePitchingRole, buyItem, useItem, potentialSummary, ageDevelopment, getLeagueRules, getSeasonSchedule, getContractStatus, getContractOffer, getPostingStatus, contractOptions, createCareer, advanceWeek, advanceWeeks, careerGoal, resolveEvent, nextSeason, retire, validateSave, overall, rateStats, getOutlook });
 });
