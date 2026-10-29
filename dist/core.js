@@ -25,7 +25,7 @@
   ];
   const ITEMS = [
     {id:'recovery',name:'회복 키트',description:'피로 25 감소 · 부상 1주 단축',price:30,effect:'피로 -25 / 부상 -1주'},
-    {id:'growth',name:'성장 훈련권',description:'3주 성장 +50% · 30세 이후 노화 감소 35%',price:45,effect:'성장·유지 보조 / 3주'},
+    {id:'growth',name:'성장 훈련권',description:'3주 성장 +50% · 35세 이후 노화 감소 35%',price:45,effect:'성장·유지 보조 / 3주'},
     {id:'protection',name:'보호 장비',description:'다음 3주 부상 확률 65% 감소',price:35,effect:'부상 위험 ×0.35 / 3주'}
   ];
   const LIFE_ITEMS = [
@@ -323,7 +323,7 @@
   function ageDevelopment(age,potential,injuryBurden=0) {
     const averageCap=Object.values(potential.caps).reduce((a,b)=>a+b,0)/5;
     const budget=age<19?25:age<24?22:age<27?18:age<30?14:0;
-    const annualDecline=age<30?0:clamp((age-29)*0.18+Math.min(20,injuryBurden)*0.035-(potential.resilience-0.6)*1.1-Math.max(0,averageCap-75)*0.025,0,2.5);
+    const annualDecline=age<35?0:clamp(2+(age-35)*.9+Math.max(0,95-averageCap)*.12+Math.max(0,1.2-potential.growthRate)*3+(1.1-potential.resilience)*2+Math.min(20,injuryBurden)*.05,1,12);
     return {growthBudget:budget,annualDecline};
   }
   function makePotential(s, seed) {
@@ -350,6 +350,36 @@
     });
   }
   function potentialSummary(s) { return {averageCap:Math.round(Object.values(s.potential.caps).reduce((a,b)=>a+b,0)/5),growthRate:s.potential.growthRate,resilience:s.potential.resilience}; }
+  function getRetirementStatus(s) {
+    const rating=overall(s),recommended=s.stage==='pro'&&s.age>=35&&rating<60&&s.phase==='seasonEnd';
+    return {recommended,rating,threshold:60,detail:recommended?team(s.teamId).name+'에서 은퇴를 권고했습니다. 지금까지의 기록으로 커리어를 마무리하거나 다음 시즌에 다시 도전할 수 있습니다.':'35세부터 기량이 하락하며, 시즌 종료 시 종합 능력 60 미만이면 구단의 은퇴 권고를 받습니다.'};
+  }
+  function getCareerAssessment(s) {
+    const leagues=['kbo','npb','mlb'].map(leagueId=>{
+      const rows=s.seasons.filter(v=>v.leagueId===leagueId),stats=blankStats();
+      rows.forEach(v=>addStats(stats,v.stats));
+      const hasCurrent=rows.some(v=>v.season===s.season);
+      if(s.stage==='pro'&&s.leagueId===leagueId&&s.week>0&&!hasCurrent)addStats(stats,s.stats);
+      const seasons=rows.filter(v=>v.season<s.season||s.week===s.schedule.weekCount).length+(!hasCurrent&&s.leagueId===leagueId&&s.stage==='pro'&&s.week===s.schedule.weekCount?1:0);
+      const label=leagueId.toUpperCase(),batter=s.role==='batter';
+      const hall=leagueId==='mlb'&&seasons>=10&&(batter?stats.h>=3000||stats.hr>=500:stats.w>=200||stats.so>=2500||stats.sv>=400);
+      const legend=seasons>=10&&(batter?stats.h>=2000||stats.hr>=300:stats.w>=150||stats.so>=2000||stats.sv>=250||stats.hld>=300);
+      const star=seasons>=7&&(batter?stats.h>=1000||stats.hr>=150:stats.w>=75||stats.so>=1000||stats.sv>=120||stats.hld>=150);
+      const regular=seasons>=5&&(batter?stats.g>=500:stats.outs>=1500||stats.g>=200);
+      const tier=hall?5:legend?4:star?3:regular?2:seasons>=3||stats.g>=200?1:0;
+      const title=hall?'MLB 명예의 전당':label+' '+['짧은 프로 커리어','평범한 프로 선수','꾸준한 주전 선수','리그 스타','레전드'][tier];
+      const metrics=batter?[['완료 시즌',seasons,10],['안타',stats.h,hall?3000:2000],['홈런',stats.hr,hall?500:300]]:[['완료 시즌',seasons,10],['승리',stats.w,150],['탈삼진',stats.so,2000],['세이브',stats.sv,250],['홀드',stats.hld,300]];
+      const awards=leagueId==='mlb'&&s.role==='pitcher'?careerGoal(s).awards.length:0;
+      return {leagueId,label,title,tier,seasons,stats,metrics,awards};
+    });
+    const played=leagues.filter(l=>l.stats.g>0||l.seasons>0);
+    const ranked=played.slice().sort((a,b)=>b.tier-a.tier||b.stats.g-a.stats.g);
+    const best=ranked[0],legends=played.filter(l=>l.tier===4);
+    const title=best?.tier===5?best.title:legends.length>1?legends.map(l=>l.label).join('·')+' 레전드':best?.title||'짧은 야구 여정';
+    const tier=best?.tier||0;
+    const descriptions=['프로 무대에 남긴 첫 발자취도 당신의 야구 인생입니다.','화려한 기록보다, 자신의 자리를 찾아 뛰었던 야구 인생입니다.','오랜 시즌 팀의 한 자리를 지킨 꾸준함이 남았습니다.','동시대 팬들에게 이름을 각인시킨 리그의 스타입니다.','한 리그의 역사를 함께 쓴 선수로 기억됩니다.','메이저리그의 역사에 이름을 남겼습니다.'];
+    return {title,tier,description:descriptions[tier],leagues,played};
+  }
   function advanceWeeks(input, planId, count=4) {
     if(!Number.isInteger(count)||count<1||count>60)fail('진행 기간을 확인해 주세요.');
     let s=validateSave(input), weeks=0, recoveries=0;
@@ -572,7 +602,7 @@
     if (s.fatigue >= 65) summary.push('피로 경고: 회복 주간으로 컨디션을 관리하세요.');
     s.lastWeek = { games, summary, gains, gamesPlayed: weekly.g };
     log(s, s.week + '주차 리포트', summary.join(' / '), 'week');
-    if (s.week === s.schedule.weekCount) { s.phase = 'seasonEnd'; if(s.stage==='highschool'&&s.age===18)s.draftTeamId=selectDraftTeam(s); log(s, '시즌 종료', s.schedule.gamesPerTeam+'경기의 시즌이 끝났습니다. 기록과 다음 시즌 진로를 확인하세요.', 'season'); }
+    if (s.week === s.schedule.weekCount) { s.phase = 'seasonEnd'; if(s.stage==='highschool'&&s.age===18)s.draftTeamId=selectDraftTeam(s); log(s, '시즌 종료', s.schedule.gamesPerTeam+'경기의 시즌이 끝났습니다. 기록과 다음 시즌 진로를 확인하세요.', 'season'); const retirement=getRetirementStatus(s);if(retirement.recommended)log(s,'구단의 은퇴 권고',retirement.detail,'career'); }
     else s.pendingEvent = weekEvent(s);
     return s;
   }
@@ -721,6 +751,7 @@
     if (s.week > 0) archive(s);
     s.phase = 'retired'; s.pendingEvent = null;
     log(s, '나의 야구 연대기', s.name + '의 기록이 커리어 북에 남았습니다.', 'career');
+    const ending=getCareerAssessment(s);log(s,'커리어 평가 · '+ending.title,ending.description,'career');
     return s;
   }
   function migrateLegacy(input) {
@@ -823,5 +854,5 @@
   // Public definitions are immutable so UI code cannot change simulation rules accidentally.
   function freeze(value) { Object.values(value).forEach(v => { if (v && typeof v === 'object') freeze(v); }); return Object.freeze(value); }
   [TEAMS, STYLES, ATTRS, PLANS, LEAGUES, POSITIONS, PITCHING_ROLES, ITEMS,LIFE_ITEMS].forEach(freeze);
-  return Object.freeze({ VERSION, TEAMS, LEAGUES, STYLES, ATTRS, PLANS, POSITIONS, PITCHING_ROLES, ITEMS, LIFE_ITEMS, getLifeShop, buyLifeItem, changePosition, changePitchingRole, buyItem, useItem, potentialSummary, ageDevelopment, getLeagueRules, getSeasonSchedule, getContractStatus, getContractOffer, getPostingStatus, contractOptions, createCareer, advanceWeek, advanceWeeks, careerGoal, resolveEvent, nextSeason, retire, validateSave, overall, rateStats, getOutlook });
+  return Object.freeze({ VERSION, TEAMS, LEAGUES, STYLES, ATTRS, PLANS, POSITIONS, PITCHING_ROLES, ITEMS, LIFE_ITEMS, getLifeShop, buyLifeItem, changePosition, changePitchingRole, buyItem, useItem, potentialSummary, ageDevelopment, getLeagueRules, getSeasonSchedule, getContractStatus, getContractOffer, getPostingStatus, contractOptions, createCareer, advanceWeek, advanceWeeks, careerGoal, getCareerAssessment, getRetirementStatus, resolveEvent, nextSeason, retire, validateSave, overall, rateStats, getOutlook });
 });
