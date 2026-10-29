@@ -28,3 +28,4 @@ select{display:block;width:100%;min-width:0;border:1px solid var(--line);backgro
 
 .creation-preferences{margin:18px 0}.creation-preferences summary{cursor:pointer;font-weight:700}.scout-actions{display:flex;flex-wrap:wrap;gap:9px;margin-top:14px}.scouting-card p{margin-top:8px}.transfer-summary{flex-wrap:wrap}
 .player-card .small.muted{color:#f4efdf}
+.graduation-card>p,.trade-card>p{margin:12px 0}.graduation-card>.segmented{margin:16px 0}.career-offer{padding:16px 0;border-top:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap}.career-offer p{font-size:12px;color:var(--muted);margin-top:5px}.career-offer button{white-space:normal}.graduation-card .segment:disabled{opacity:1}

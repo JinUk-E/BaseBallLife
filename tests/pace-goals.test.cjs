@@ -31,7 +31,13 @@ test('높은 재능의 타자와 투수는 관리 선택으로 30세 전에 전 
  while(s.age<30&&!Object.values(s.attrs).every(v=>v===99)){
  while(s.phase==='active'){
  if(s.pendingEvent){const preferred=s.pendingEvent.choices.find(c=>['fundamentals','recharge','personal'].includes(c.id));s=D.resolveEvent(s,preferred.id);}
- else s=D.advanceWeeks(s,'balanced',60).state;
+ else {
+ const item=D.ITEMS.find(i=>i.id==='growth');
+ if(!s.buffs.growth&&!s.usedItems.length&&s.points>=item.price)s=D.useItem(D.buyItem(s,'growth'),'growth');
+ const weakest=Object.keys(s.attrs).reduce((a,b)=>s.attrs[a]<=s.attrs[b]?a:b);
+ const focused=role==='batter'?{contact:'contact',power:'power',discipline:'video',speed:'running',fielding:'defense'}:{velocity:'velocity',control:'control',movement:'velocity',stamina:'stamina',composure:'mental'};
+ s=D.advanceWeek(s,s.fatigue>=60||s.injury?'rest':Math.min(...Object.values(s.attrs))>=80?focused[weakest]:'balanced');
+ }
  }
  if(Object.values(s.attrs).every(v=>v===99))break;
  s=D.nextSeason(s,s.teamId,1);
