@@ -27,3 +27,4 @@ select{display:block;width:100%;min-width:0;border:1px solid var(--line);backgro
 .retired-actions{align-items:center}.retired-actions .primary{margin-top:0}.retired-actions .secondary{color:var(--green);background:#fff;border-color:#fff}
 
 .creation-preferences{margin:18px 0}.creation-preferences summary{cursor:pointer;font-weight:700}.scout-actions{display:flex;flex-wrap:wrap;gap:9px;margin-top:14px}.scouting-card p{margin-top:8px}.transfer-summary{flex-wrap:wrap}
+.player-card .small.muted{color:#f4efdf}
