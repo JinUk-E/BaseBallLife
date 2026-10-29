@@ -223,34 +223,59 @@
     s.fatigue = clamp(s.fatigue + plan.fatigue - 7, 0, 100);
     return ATTRS[s.role].map(a => ({ key: a.key, delta: Math.round((s.attrs[a.key] - before[a.key]) * 10) / 10 })).filter(g => g.delta !== 0);
   }
+  function battingChances(s,opponent) {
+    const a=s.attrs,c=a.contact/99,p=a.power/99,d=a.discipline/99,v=a.speed/99;
+    const tired=Math.max(0,s.fatigue-35)/65,rival=(opponent.strength-55)/100,form=(s.morale-50)/50;
+    // Per-opportunity probabilities. No season total, target average or record cap.
+    // Home runs and strikeouts are separate AB outcomes; contact affects balls in play.
+    return {
+      walk:clamp(.018+.16*d**1.7+rival*.01-tired*.025+form*.003,.005,.4),
+      homeRun:clamp(.002+.125*p**2.6*(.7+.3*c)-tired*.018-rival*.015+form*.002,.001,.4),
+      strikeout:clamp(.37-.23*c-.06*d+.025*p+rival*.045+tired*.10-form*.008,.015,.55),
+      hitOnBall:clamp(.175+.195*c**1.25+.015*v-tired*.065-rival*.055+form*.008,.02,.8),
+      double:clamp(.12+.22*p**.9+.025*v,.05,.55),triple:.003+.052*v**2.5,
+      stealAttempt:clamp(.004+.49*v**3-tired*.10-rival*.02+form*.005,.001,.85),
+      stealSuccess:clamp(.4+.56*v-tired*.12-rival*.06+form*.01,.05,.98),
+      runSupport:.05*v-tired*.06
+    };
+  }
+  function runAfterReach(s,st,base,chances) {
+    // Singles/walks/HBP can lead to steals of second and third; doubles only third.
+    // A caught runner cannot also score. Full inning/base occupancy is abstracted.
+    if(base===1&&random(s)<chances.stealAttempt){
+      if(random(s)>=chances.stealSuccess){st.cs++;return;}
+      st.sb++;base=2;
+    }
+    if(base===2&&random(s)<chances.stealAttempt*.22){
+      if(random(s)>=chances.stealSuccess-.1){st.cs++;return;}
+      st.sb++;base=3;
+    }
+    if(random(s)<.25+base*.1+chances.runSupport)st.r++;
+  }
   function batGame(s, opponent) {
     const st = blankStats(); st.g = 1;
-    const a = s.attrs, penalty = Math.max(0, s.fatigue - 35) * 0.001;
-    const hitChance = clamp(0.21 + (a.contact - 40) * 0.002 + (a.power - 50) * 0.0004 - penalty - (opponent.strength - 55) * 0.0008, 0.12, 0.38);
+    const chances=battingChances(s,opponent);
     const appearances = integer(s, 3, 5);
     for (let i = 0; i < appearances; i++) {
       st.pa++;
-      const walk = 0.045 + a.discipline * 0.0007;
       const roll = random(s);
-      if (roll < walk) { st.bb++; continue; }
-      if (roll < walk + 0.008) { st.hbp++; continue; }
-      if (roll < walk + 0.026) { st.sf++; st.rbi++; continue; }
+      if (roll < chances.walk) { st.bb++;runAfterReach(s,st,1,chances);continue; }
+      if (roll < chances.walk + 0.008) { st.hbp++;runAfterReach(s,st,1,chances);continue; }
+      if (roll < chances.walk + 0.026) { st.sf++; st.rbi++; continue; }
       st.ab++;
-      if (random(s) < hitChance) {
+      const outcome=random(s);
+      if(outcome<chances.homeRun){
+        st.h++;st.hr++;st.r++;st.rbi++;
+        for(let runner=0;runner<3;runner++)if(random(s)<.22)st.rbi++;
+      }else if(outcome<chances.homeRun+chances.strikeout)st.so++;
+      else if (random(s) < chances.hitOnBall) {
         st.h++;
-        const extra = random(s);
-        if (extra < 0.035 + a.power * 0.0016) { st.hr++; st.r++; st.rbi += integer(s, 1, 3); }
-        else if (extra < 0.06 + a.power * 0.0016) st.triples++;
-        else if (extra < 0.25 + a.power * 0.0016) st.doubles++;
-        if (st.hr === 0 || extra >= 0.035 + a.power * 0.0016) {
-          if (random(s) < 0.32) st.rbi += integer(s, 1, 2);
-          if (random(s) < 0.32) st.r++;
-        }
-      } else if (random(s) < clamp(0.36 - (a.contact - 50) * 0.003 + (a.power - a.contact) * 0.001, 0.15, 0.5)) st.so++;
-    }
-    const bases = st.h - st.hr + st.bb + st.hbp;
-    for (let i = 0; i < bases; i++) {
-      if (random(s) < 0.02 + a.speed * 0.0013) { if (random(s) < 0.52 + a.speed * 0.004) st.sb++; else st.cs++; }
+        const extra = random(s);let base=1;
+        if(extra<chances.triple){st.triples++;base=3;}
+        else if(extra<chances.triple+chances.double){st.doubles++;base=2;}
+        if(random(s)<.32)st.rbi+=integer(s,1,2);
+        runAfterReach(s,st,base,chances);
+      }
     }
     st.r = Math.min(st.r, st.h + st.bb + st.hbp);
     return st;
@@ -560,7 +585,7 @@
           let highlight = '';
           if (player) {
             if (s.role === 'batter') {
-              line = player.ab + '타수 ' + player.h + '안타 · ' + player.hr + '홈런 · ' + player.rbi + '타점';
+              line = player.ab + '타수 ' + player.h + '안타 · ' + player.hr + '홈런 · ' + player.rbi + '타점 · ' + player.sb + '도루';
               highlight = player.hr ? '담장을 넘기는 타구!' : player.h >= 3 ? '뜨거운 타격감, 3안타 이상!' : player.sb ? '빠른 발로 베이스를 훔쳤습니다.' : player.h ? '안타로 기회를 이어갑니다.' : '오늘의 타석을 다음 경기의 경험으로.';
               if(defensivePlay)highlight+=' 호수비로 1실점을 막았습니다!';
             } else {
@@ -602,7 +627,7 @@
     if(!weekEvent(s)) s.buffs.growth=Math.max(0,s.buffs.growth-1);
     s.buffs.protection=Math.max(0,s.buffs.protection-1);
     s.usedItems=[]; s.roleChangedWeek=false;
-    const summary = [(s.stage==='highschool'?getSchoolName(s.teamId,s.schoolCountry):team(s.teamId).short) + ' ' + wins + '승 ' + games.filter(g=>g.result==='L').length + '패 ' + games.filter(g=>g.result==='D').length + '무', s.role === 'batter' ? weekly.g + '경기 출전 · ' + weekly.h + '안타 · ' + weekly.hr + '홈런' : weekly.g + '경기 등판 · ' + weekly.starts + '선발 · ' + rateStats(weekly, s.role).ip + '이닝 · ' + weekly.so + '삼진'];
+    const summary = [(s.stage==='highschool'?getSchoolName(s.teamId,s.schoolCountry):team(s.teamId).short) + ' ' + wins + '승 ' + games.filter(g=>g.result==='L').length + '패 ' + games.filter(g=>g.result==='D').length + '무', s.role === 'batter' ? weekly.g + '경기 출전 · ' + weekly.h + '안타 · ' + weekly.hr + '홈런 · ' + weekly.sb + '도루' : weekly.g + '경기 등판 · ' + weekly.starts + '선발 · ' + rateStats(weekly, s.role).ip + '이닝 · ' + weekly.so + '삼진'];
     if(missed) summary.push(newInjury ? '부상 발생: 이번 주 경기를 쉬며 회복했습니다. 능력 감소를 확인하세요.' : '재활 주간: 출전 없이 훈련 효과 25%로 회복했습니다.');
     if (!weekly.g) summary.push('출전하지 못해도 훈련과 신뢰는 쌓입니다. 회복 후 다음 기회를 준비하세요.');
     if (s.fatigue >= 65) summary.push('피로 경고: 회복 주간으로 컨디션을 관리하세요.');
@@ -875,7 +900,7 @@
     const stats=(v,label,limit)=>{
       object(v,STAT_KEYS,label);STAT_KEYS.forEach(k=>number(v[k],0,100000,label+'/'+k,true));
       if(v.g>limit||v.h>v.ab||v.doubles+v.triples+v.hr>v.h||v.so>(s.role==='batter'?v.ab-v.h:v.outs)||(s.role==='batter'&&v.pa!==v.ab+v.bb+v.hbp+v.sf))err(label+' 타격 관계');
-      if(v.starts>v.g||v.w+v.l+v.sv+v.hld>v.g||v.sv+v.hld>v.g-v.starts||v.er>v.ra||v.outs>v.g*27||v.r>v.h+v.bb+v.hbp||v.hr>v.r||v.hr>v.rbi||v.sb+v.cs>v.h+v.bb+v.hbp-v.hr)err(label+' 기록 관계');
+      if(v.starts>v.g||v.w+v.l+v.sv+v.hld>v.g||v.sv+v.hld>v.g-v.starts||v.er>v.ra||v.outs>v.g*27||v.r>v.h+v.bb+v.hbp||v.hr>v.r||v.hr>v.rbi||v.sb+v.cs>2*(v.h+v.bb+v.hbp-v.hr))err(label+' 기록 관계');
       if(s.role==='batter'){if(v.g*5<v.pa||['starts','outs','ha','er','ra','w','l','sv','hld'].some(k=>v[k]!==0))err(label+' 타자 기록');}
       else if(['ab','h','doubles','triples','hr','hbp','sf','rbi','r','sb','cs','pa'].some(k=>v[k]!==0))err(label+' 투수 기록');
     };
