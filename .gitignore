@@ -1,4 +1,5 @@
 node_modules/
+_site/
 .validation/
 *.tar.gz
 play.html
