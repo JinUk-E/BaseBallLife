@@ -52,6 +52,8 @@
       { id: 'contact', name: '타격 감각', description: '컨택·선구안 집중 성장 · 피로 증가', fatigue: 10 },
       { id: 'power', name: '장타 훈련', description: '파워 집중 성장 · 피로 크게 증가', fatigue: 17 },
       { id: 'defense', name: '수비·주루', description: '수비·주력 성장 · 감독 신뢰 증가', fatigue: 8 },
+      { id: 'video', name: '타석 영상 분석', description: '선구안·컨택 성장 · 피로 소폭 회복', fatigue: -4 },
+      { id: 'running', name: '베이스 러닝', description: '주력 집중 성장 · 수비 보조 성장', fatigue: 8 },
       { id: 'rest', name: '회복 주간', description: '피로 크게 감소 · 출전 기회와 성장 감소', fatigue: -34 }
     ],
     pitcher: [
@@ -59,6 +61,8 @@
       { id: 'velocity', name: '구위 강화', description: '구위·변화구 성장 · 피로 크게 증가', fatigue: 17 },
       { id: 'control', name: '제구 훈련', description: '제구·위기관리 집중 성장 · 피로 증가', fatigue: 10 },
       { id: 'stamina', name: '지구력 훈련', description: '체력 집중 성장 · 감독 신뢰 증가', fatigue: 8 },
+      { id: 'video', name: '타자 영상 분석', description: '제구·변화구 성장 · 피로 소폭 회복', fatigue: -4 },
+      { id: 'mental', name: '위기관리 훈련', description: '위기관리 집중 성장 · 체력 보조 성장', fatigue: 4 },
       { id: 'rest', name: '회복 주간', description: '피로 크게 감소 · 등판 기회와 성장 감소', fatigue: -34 }
     ]
   };
@@ -157,6 +161,9 @@
     else if (plan.id === 'velocity') { grow('velocity', 2.1); grow('movement', 1.3); }
     else if (plan.id === 'control') { grow('control', 2.2); grow('composure', 1.1); }
     else if (plan.id === 'stamina') { grow('stamina', 2.5); grow('composure', 0.6); s.trust = clamp(s.trust + 3, 0, 100); }
+    else if (plan.id === 'video') { grow(s.role==='batter'?'discipline':'control',1.5); grow(s.role==='batter'?'contact':'movement',.8); }
+    else if (plan.id === 'running') { grow('speed',2.3); grow('fielding',.6); }
+    else if (plan.id === 'mental') { grow('composure',2); grow('stamina',.8); }
     else { s.morale = clamp(s.morale + 5, 0, 100); }
     s.fatigue = clamp(s.fatigue + plan.fatigue - 7, 0, 100);
     return ATTRS[s.role].map(a => ({ key: a.key, delta: Math.round((s.attrs[a.key] - before[a.key]) * 10) / 10 })).filter(g => g.delta !== 0);
@@ -208,6 +215,30 @@
     return st;
   }
   const scheduleCache = new Map();
+  const LEAGUE_RULES = Object.freeze({
+    kbo:Object.freeze({label:'KBO',regulation:9,maxInnings:11,automaticRunner:false,ties:true,description:'정규 9회 · 연장 11회까지 · 이후 동점이면 무승부'}),
+    npb:Object.freeze({label:'NPB',regulation:9,maxInnings:12,automaticRunner:false,ties:true,description:'정규 9회 · 연장 12회까지 · 이후 동점이면 무승부'}),
+    mlb:Object.freeze({label:'MLB',regulation:9,maxInnings:null,automaticRunner:true,ties:false,description:'정규 9회 · 연장부터 무사 2루 승부치기 · 무승부 없음'}),
+    highschool:Object.freeze({label:'가상 고교',regulation:9,maxInnings:null,automaticRunner:true,ties:false,description:'게임 규칙: 정규 9회 · 연장 승부치기로 승패 결정'})
+  });
+  function getLeagueRules(leagueId){if(!LEAGUE_RULES[leagueId])fail('리그를 확인해 주세요.');return LEAGUE_RULES[leagueId];}
+  function finishTiedGame(s,home,away,homeStrength,awayStrength) {
+    if(home!==away)return {home,away,note:'',extra:false};
+    const rule=getLeagueRules(s.leagueId);
+    let inning=9;
+    while(home===away&&inning<(rule.maxInnings||99)){
+      inning++;
+      const mean=rule.automaticRunner ? .95 : .45;
+      const top=poisson(s,mean+(awayStrength-homeStrength)*.003);
+      const bottom=poisson(s,mean+(homeStrength-awayStrength)*.003);
+      away+=top;
+      // A non-homer walk-off ends the game as soon as the home side takes the lead.
+      home+=bottom>top?top+1:bottom;
+    }
+    // Finite simulation guard for leagues without an innings limit.
+    if(home===away&&!rule.ties){if(random(s)<.5)home++;else away++;}
+    return {home,away,extra:true,note:'연장 '+inning+'회'+(rule.automaticRunner?' · 승부치기':'')+(home===away?' · 무승부':home>away?' · 끝내기':' · 원정 승리')};
+  }
   function roundPairs(ids,day) {
     ids=ids.slice(); for(let r=0;r<day%(ids.length-1);r++)ids.splice(1,0,ids.pop());
     return Array.from({length:ids.length/2},(_,i)=>[ids[i],ids[ids.length-1-i]]);
@@ -324,6 +355,50 @@
     else s.buffs[id]=3;
     log(s,item.name+' 사용',item.description,'choice'); return s;
   }
+  const EXTRA_EVENTS = [
+    ['film','상대의 약점이 보인다','다음 상대의 영상을 보며 공략법을 정합니다.',
+      ['film-study','분석실에서 패턴을 찾는다','선구안/제구 성장 · 피로 +4'],
+      ['team-scout','분석 내용을 동료들과 나눈다','신뢰 +8 · 사기 +5'], 'fundamentals'],
+    ['slump','흔들리는 감각','좋았던 감각을 찾기 위해 코치가 세 가지 접근을 제안합니다.',
+      ['reset-form','폼을 점검하고 기본기로 돌아간다','컨택/제구 성장 · 피로 +6'],
+      ['mental-reset','스포츠 심리 상담을 받는다','사기 +15 · 피로 -8'], 'recharge'],
+    ['scout','관중석의 스카우트','경기장에 스카우트가 찾아왔습니다. 무엇을 보여줄까요?',
+      ['showcase','장점을 집중적으로 다듬는다','주특기 성장 · 피로 +14'],
+      ['professional','꾸준한 준비와 팀 플레이로 답한다','신뢰 +12 · 사기 +4'], 'personal'],
+    ['recovery','트레이너의 경고','시즌을 오래 버티려면 훈련 방식도 바꿔야 합니다.',
+      ['prehab','예방 운동 프로그램을 따른다','3주 부상 예방 · 피로 -8'],
+      ['nutrition','영양과 수면 계획을 조정한다','피로 -18 · 사기 +6'], 'fundamentals'],
+    ['mentor','베테랑의 노하우','선배가 자신만의 루틴을 알려주겠다고 합니다.',
+      ['mentor-skill','개인 레슨을 받는다','수비/변화구 성장 · 피로 +8'],
+      ['mentor-lead','후배들과 함께 레슨을 듣는다','신뢰 +10 · 사기 +8'], 'recharge'],
+    ['pressure','중요한 경기의 부담','순위 경쟁 속에서 코치가 준비 방향을 묻습니다.',
+      ['clutch','승부처 대응을 집중 훈련한다','선구안/위기관리 성장 · 피로 +10'],
+      ['routine','평소 루틴을 지킨다','신뢰 +6 · 피로 -10'], 'personal'],
+    ['community','팬들이 보내온 응원','응원 편지를 받은 구단에서 팬 행사를 제안합니다.',
+      ['fan-day','팬 행사에 참여한다','사기 +18 · 신뢰 +5 · 피로 +8'],
+      ['quiet-focus','개인 훈련에 집중한다','주특기 성장 · 피로 +6'], 'recharge'],
+    ['competition','새로운 주전 경쟁','팀 동료의 활약으로 출전 경쟁이 치열해졌습니다.',
+      ['extra-work','약점을 보완하는 추가 훈련','가장 낮은 능력 성장 · 피로 +12'],
+      ['team-role','감독과 팀 내 역할을 의논한다','신뢰 +14 · 사기 +3'], 'fundamentals'],
+    ['camp-invite','전문 훈련실의 초대','구단이 짧은 집중 프로그램을 지원합니다.',
+      ['growth-camp','성장 프로그램에 참여한다','3주 성장 보조 · 피로 +10'],
+      ['safe-camp','몸 관리 프로그램을 선택한다','3주 부상 예방 · 피로 -5'], 'recharge'],
+    ['rival','라이벌의 활약','동기 선수의 좋은 성적이 자극이 됐습니다.',
+      ['rival-chase','주특기를 더욱 날카롭게 만든다','주특기 성장 · 사기 +5 · 피로 +12'],
+      ['rival-learn','서로 훈련법을 공유한다','신뢰 +8 · 가장 낮은 능력 성장 · 피로 +5'], 'personal']
+  ];
+  const EVENT_EFFECTS = {
+    'film-study':{skill:'analysis',growth:2,fatigue:4},'team-scout':{trust:8,morale:5},
+    'reset-form':{skill:'accuracy',growth:2.2,fatigue:6},'mental-reset':{morale:15,fatigue:-8},
+    showcase:{skill:'style',growth:3.5,fatigue:14},professional:{trust:12,morale:4},
+    prehab:{protection:3,fatigue:-8},nutrition:{fatigue:-18,morale:6},
+    'mentor-skill':{skill:'defense',growth:2.5,fatigue:8},'mentor-lead':{trust:10,morale:8},
+    clutch:{skill:'mental',growth:3,fatigue:10},routine:{trust:6,fatigue:-10},
+    'fan-day':{morale:18,trust:5,fatigue:8},'quiet-focus':{skill:'style',growth:2,fatigue:6},
+    'extra-work':{skill:'weakest',growth:3,fatigue:12},'team-role':{trust:14,morale:3},
+    'growth-camp':{buff:3,fatigue:10},'safe-camp':{protection:3,fatigue:-5},
+    'rival-chase':{skill:'style',growth:3,fatigue:12,morale:5},'rival-learn':{skill:'weakest',growth:1.5,fatigue:5,trust:8}
+  };
   function weekEvent(s) {
     const events = {
       4: { id: 'coach', title: '감독실의 짧은 면담', body: '감독이 앞으로 어떤 선수로 성장하고 싶은지 묻습니다.', choices: [
@@ -337,7 +412,15 @@
         { id: 'personal', label: '나만의 기술을 완성한다', detail: '핵심·보조 능력 성장 · 잠재력 적용 · 피로 +8' }] }
     };
     const marks=[Math.max(1,Math.round(s.schedule.weekCount*.25)),Math.max(2,Math.round(s.schedule.weekCount*.5)),Math.max(3,Math.round(s.schedule.weekCount*.75))];
-    const eventWeek=[4,8,12][marks.indexOf(s.week)];return events[eventWeek]?clone(events[eventWeek]):null;
+    const eventWeek=[4,8,12][marks.indexOf(s.week)];
+    if(events[eventWeek])return clone(events[eventWeek]);
+    const slots=[.125,.375,.625,.875].map(f=>Math.max(1,Math.round(s.schedule.weekCount*f)));
+    const index=slots.indexOf(s.week);
+    if(index<0||s.week>=s.schedule.weekCount)return null;
+    const offset=seedValue(s.id+':events')%EXTRA_EVENTS.length;
+    const [id,title,body,a,b,fallback]=EXTRA_EVENTS[(offset+(s.season-1)*4+index)%EXTRA_EVENTS.length];
+    const known=Object.values(events).flatMap(e=>e.choices).find(c=>c.id===fallback);
+    return {id,title,body,choices:[a,b].map(([id,label,detail])=>({id,label,detail})).concat(clone(known))};
   }
   function advanceWeek(input, planId) {
     const s = validateSave(input);
@@ -375,13 +458,17 @@
           const isA = a.id === s.teamId, rival = isA ? b : a; const day=++playerGameIndex;
           const eligible = !missed && (s.role === 'batter' || (s.pitchingRole === 'starter' ? getSeasonSchedule(s).starterSlots[s.teamId].includes(fixtureKey(fixture)) && (plan.id !== 'rest' || weekly.starts===0) : s.pitchingRole === 'reliever' ? [0,2,4,6].includes(day) : [0,2,4].includes(day)));
           const played = eligible && random(s) < odds;
-          let our = isA ? aScore : bScore, opp = isA ? bScore : aScore;
+          let our = isA ? aScore : bScore, opp = isA ? bScore : aScore, defensivePlay=false;
           if (played) {
             player = s.role === 'batter' ? batGame(s, rival) : pitchGame(s, rival);
-            if (s.role === 'batter') our = Math.max(our, player.rbi, player.r);
+            if (s.role === 'batter') {
+              our = Math.max(our, player.rbi, player.r);
+              if(s.position!=='DH'&&opp>0&&random(s)<s.attrs.fielding*.0025){opp--;defensivePlay=true;}
+            }
             else opp = player.ra + poisson(s, (27 - player.outs) / 27 * (4.4 + (rival.strength - team(s.teamId).strength) * 0.035));
           }
-          if (our === opp && (!['kbo','npb'].includes(s.leagueId) || random(s)>=0.18)) { if (random(s) < 0.5) our++; else opp++; }
+          const decision=finishTiedGame(s,isA?our:opp,isA?opp:our,a.strength,b.strength);
+          our=isA?decision.home:decision.away;opp=isA?decision.away:decision.home;
           const won = our > opp;
           let line = missed ? '부상 회복 중' : s.role === 'pitcher' && !eligible ? '등판 휴식' : '출전 대기';
           let highlight = '';
@@ -389,24 +476,26 @@
             if (s.role === 'batter') {
               line = player.ab + '타수 ' + player.h + '안타 · ' + player.hr + '홈런 · ' + player.rbi + '타점';
               highlight = player.hr ? '담장을 넘기는 타구!' : player.h >= 3 ? '뜨거운 타격감, 3안타 이상!' : player.sb ? '빠른 발로 베이스를 훔쳤습니다.' : player.h ? '안타로 기회를 이어갑니다.' : '오늘의 타석을 다음 경기의 경험으로.';
+              if(defensivePlay)highlight+=' 호수비로 1실점을 막았습니다!';
             } else {
               // One decision per appearance; saves and holds require a close team win.
               if (player.starts) {
-                if (won && player.outs >= 15 && random(s) < 0.72) player.w = 1;
-                if (our<opp && player.ra > 0 && random(s) < 0.72) player.l = 1;
-              } else if (won && our - opp <= 3 && player.ra === 0) {
+                if (!decision.extra && won && player.outs >= 15 && random(s) < 0.72) player.w = 1;
+                if (!decision.extra && our<opp && player.ra > 0 && random(s) < 0.72) player.l = 1;
+              } else if (!decision.extra && won && our - opp <= 3 && player.ra === 0) {
                 if(s.pitchingRole === 'closer') player.sv=1;
                 else if(random(s)<0.8) player.hld=1;
-              } else if(won && random(s)<0.16) player.w=1;
-              else if(our<opp && player.ra>0 && random(s)<0.3) player.l=1;
+              } else if(!decision.extra && won && random(s)<0.16) player.w=1;
+              else if(!decision.extra && our<opp && player.ra>0 && random(s)<0.3) player.l=1;
               line = rateStats(player, s.role).ip + '이닝 · ' + player.er + '자책 · ' + player.so + '삼진' + (player.sv ? ' · 세이브' : player.hld ? ' · 홀드' : '');
               highlight = player.er === 0 ? '무실점으로 마운드를 지켰습니다.' : player.outs >= 18 && player.er <= 3 ? '퀄리티 스타트! 선발의 역할을 해냈습니다.' : '다음 등판을 위한 과제가 남았습니다.';
             }
             addStats(weekly, player);
           }
+          if(decision.note)line+=' · '+decision.note;
           games.push({ date:fixture.date, opponentId: rival.id, our, opp, result: won ? 'W' : our===opp?'D':'L', played, line, highlight });
           aScore = isA ? our : opp; bScore = isA ? opp : our;
-        } else if (aScore === bScore && (!['kbo','npb'].includes(s.leagueId) || random(s)>=0.18)) { if (random(s) < 0.5) aScore++; else bScore++; }
+        } else {const decision=finishTiedGame(s,aScore,bScore,a.strength,b.strength);aScore=decision.home;bScore=decision.away;}
         const aRow = s.standings.find(r => r.teamId === a.id), bRow = s.standings.find(r => r.teamId === b.id);
         aRow.rs += aScore; aRow.ra += bScore; bRow.rs += bScore; bRow.ra += aScore;
         if (aScore > bScore) { aRow.w++; bRow.l++; } else if(bScore>aScore) { bRow.w++; aRow.l++; } else {aRow.t++;bRow.t++;}
@@ -449,6 +538,14 @@
     ['trust', 'morale', 'fatigue'].forEach(k => { s[k] = clamp(s[k], 0, 100); });
     log(s, s.pendingEvent.title, choice.label + ' — ' + choice.detail, 'choice');
     s.buffs.growth=Math.max(0,s.buffs.growth-1);
+    const effect=EVENT_EFFECTS[choiceId];
+    if(effect){
+      const keys={analysis:s.role==='batter'?'discipline':'control',accuracy:s.role==='batter'?'contact':'control',defense:s.role==='batter'?'fielding':'movement',mental:s.role==='batter'?'discipline':'composure',style:s.style,weakest:ATTRS[s.role].reduce((a,b)=>s.attrs[a.key]<=s.attrs[b.key]?a:b).key};
+      if(effect.skill)grow(keys[effect.skill],effect.growth);
+      for(const key of ['fatigue','trust','morale'])s[key]=clamp(s[key]+(effect[key]||0),0,100);
+      if(effect.buff)s.buffs.growth=Math.max(s.buffs.growth,effect.buff);
+      if(effect.protection)s.buffs.protection=Math.max(s.buffs.protection,effect.protection);
+    }
     s.pendingEvent = null;
     return s;
   }
@@ -655,11 +752,11 @@
       v.games.forEach((g,i)=>{object(g,['date','opponentId','our','opp','result','played','line','highlight'],'경기');const fixture=expected[i],opponent=fixture.home===s.teamId?fixture.away:fixture.home;if(g.date!==fixture.date||g.opponentId!==opponent)err('경기 일정');number(g.our,0,100,'득점',true);number(g.opp,0,100,'실점',true);if(g.result!==(g.our>g.opp?'W':g.our<g.opp?'L':'D')||typeof g.played!=='boolean'||(g.result==='D'&&!['kbo','npb'].includes(s.leagueId)))err('경기 결과');str(g.line,160,'경기 기록');str(g.highlight,200,'하이라이트',true);});
       number(v.gamesPlayed,0,s.role==='batter'?v.games.length:4,'주간 출전',true);if(v.gamesPlayed!==v.games.filter(g=>g.played).length)err('주간 출전 합계');array(v.summary,6,'주간 요약');v.summary.forEach(t=>str(t,300,'요약'));array(v.gains,5,'능력 변화');const seen=new Set();v.gains.forEach(g=>{object(g,['key','delta'],'변화 행');if(!attrKeys.includes(g.key)||seen.has(g.key))err('변화 능력');seen.add(g.key);number(g.delta,-10,20,'변화량');});
     }else if(s.week>0)err('주간 결과 누락');
-    if(s.pendingEvent!==null){if(s.phase!=='active')err('종료 후 사건');const expected=weekEvent(s);object(s.pendingEvent,['id','title','body','choices'],'사건');array(s.pendingEvent.choices,2,'선택지');if(!expected||['id','title','body'].some(k=>s.pendingEvent[k]!==expected[k])||s.pendingEvent.choices.length!==2)err('사건 내용');s.pendingEvent.choices.forEach((v,i)=>{object(v,['id','label','detail'],'선택지');if(['id','label','detail'].some(k=>v[k]!==expected.choices[i][k]))err('선택지 내용');});}
+    if(s.pendingEvent!==null){if(s.phase!=='active')err('종료 후 사건');const expected=weekEvent(s);object(s.pendingEvent,['id','title','body','choices'],'사건');array(s.pendingEvent.choices,3,'선택지');if(!expected||['id','title','body'].some(k=>s.pendingEvent[k]!==expected[k])||s.pendingEvent.choices.length!==expected.choices.length)err('사건 내용');s.pendingEvent.choices.forEach((v,i)=>{object(v,['id','label','detail'],'선택지');if(['id','label','detail'].some(k=>v[k]!==expected.choices[i][k]))err('선택지 내용');});}
     return clone(s);
   }
   // Public definitions are immutable so UI code cannot change simulation rules accidentally.
   function freeze(value) { Object.values(value).forEach(v => { if (v && typeof v === 'object') freeze(v); }); return Object.freeze(value); }
   [TEAMS, STYLES, ATTRS, PLANS, LEAGUES, POSITIONS, PITCHING_ROLES, ITEMS].forEach(freeze);
-  return Object.freeze({ VERSION, TEAMS, LEAGUES, STYLES, ATTRS, PLANS, POSITIONS, PITCHING_ROLES, ITEMS, changePosition, changePitchingRole, buyItem, useItem, potentialSummary, ageDevelopment, getSeasonSchedule, getContractStatus, getContractOffer, getPostingStatus, contractOptions, createCareer, advanceWeek, advanceWeeks, careerGoal, resolveEvent, nextSeason, retire, validateSave, overall, rateStats, getOutlook });
+  return Object.freeze({ VERSION, TEAMS, LEAGUES, STYLES, ATTRS, PLANS, POSITIONS, PITCHING_ROLES, ITEMS, changePosition, changePitchingRole, buyItem, useItem, potentialSummary, ageDevelopment, getLeagueRules, getSeasonSchedule, getContractStatus, getContractOffer, getPostingStatus, contractOptions, createCareer, advanceWeek, advanceWeeks, careerGoal, resolveEvent, nextSeason, retire, validateSave, overall, rateStats, getOutlook });
 });
