@@ -4,7 +4,7 @@ const copy=s=>JSON.parse(JSON.stringify(s));
 const create=(options={})=>D.createCareer({name:'관찰 검증',role:'batter',seed:19,...options});
 function finish(s){while(s.phase==='active')s=s.pendingEvent?D.resolveEvent(s,s.pendingEvent.choices.at(-1).id):D.advanceWeeks(s,'balanced',60).state;return s;}
 function freeAgent(){let s=create({entry:'pro',favoriteTeamId:'npb-yomiuri'});for(let y=1;y<=8;y++){s=finish(s);if(y<8)s=D.nextSeason(s,s.teamId);}return s;}
-test('한국·미국·일본의 가상 고교가 각국 프로로 이어지고 국가·선호 구단을 저장한다',()=>{
+test('한국·미국·일본의 실제 학교 표본이 각국 프로로 이어지고 국가·선호 구단을 저장한다',()=>{
  for(const [schoolCountry,target] of [['kr','kbo'],['us','mlb'],['jp','npb']]){
   let s=create({schoolCountry,favoriteTeamId:'kbo-lg'});assert.equal(s.age,16);assert.equal(s.schoolCountry,schoolCountry);
   assert.ok(D.getSchoolName(s.teamId,schoolCountry));assert.match(s.history[0].text,new RegExp(D.getSchoolName(s.teamId,schoolCountry)));
@@ -70,7 +70,7 @@ test('새 시작 화면에 국가·선호 구단·10개 KBO 테마가 있으며 
  const source=fs.readFileSync(require.resolve('../dist/app.js'),'utf8');vm.runInNewContext(source,context());
  assert.match(elements.get('main').innerHTML,/고교 시작 국가/);assert.match(elements.get('main').innerHTML,/선호 구단/);
  events.change({target:{id:'theme-select',value:'kbo-lg'}});assert.equal(store.get('dugout.theme.v1'),'kbo-lg');assert.equal(style['--green'],'#70182f');
- await events.click({target:{closest:()=>({dataset:{schoolCountry:'us'}})}});assert.match(elements.get('main').innerHTML,/캘리포니아 선셋고/);
+ await events.click({target:{closest:()=>({dataset:{schoolCountry:'us'}})}});assert.match(elements.get('main').innerHTML,/St\. John Bosco/);
  store.set('dugout.career.v1',JSON.stringify(create({schoolCountry:'us',favoriteTeamId:'kbo-lg'})));vm.runInNewContext(source,context());
  assert.match(elements.get('main').innerHTML,/MLB에서 쓰는 나의 이야기/);assert.match(elements.get('main').innerHTML,/선호 구단 · LG 트윈스/);
  const fa=freeAgent();store.set('dugout.career.v1',JSON.stringify(fa));vm.runInNewContext(source,context());
