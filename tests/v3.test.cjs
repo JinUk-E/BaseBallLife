@@ -102,10 +102,10 @@ test('Contracts_ReservedServiceAndMultiYearFA_EnforceLeagueRulesAndKeepSalary',(
       const options=core.contractOptions(s);
       assert.equal(core.getContractStatus(s).serviceYears,year);
       if(year<threshold){
-        assert.deepEqual(options.map(o=>o.teamId),[own]);
+        assert.deepEqual(options.map(o=>o.teamId),[s.teamId]);
         assert.throws(()=>core.nextSeason(s,foreign));
-        assert.throws(()=>core.nextSeason(s,own,4));
-        s=core.nextSeason(s,own);
+        assert.throws(()=>core.nextSeason(s,s.teamId,4));
+        s=core.nextSeason(s,s.teamId);
       } else {
         assert.ok(options.length>1);
         assert.equal(core.getContractStatus(s).faEligible,true);
@@ -113,15 +113,16 @@ test('Contracts_ReservedServiceAndMultiYearFA_EnforceLeagueRulesAndKeepSalary',(
         else assert.ok(options.length<core.TEAMS.filter(t=>t.leagueId!=='highschool').length,'FA must contain actual offers rather than every team');
       }
     }
-    const faTeam=core.contractOptions(s).find(o=>o.teamId!==own).teamId;
+    const faTeam=core.contractOptions(s).find(o=>o.teamId!==s.teamId).teamId;
     s=core.nextSeason(s,faTeam,4);
     assert.equal(s.contract.yearsLeft,4);
     const salary=s.salary;
     for(const remaining of [3,2,1]){
       s=endSeason(s,core,'managed');
-      assert.deepEqual(core.contractOptions(s).map(o=>o.teamId),[faTeam]);
-      assert.throws(()=>core.nextSeason(s,own));
-      s=core.nextSeason(s,faTeam);
+      assert.deepEqual(core.contractOptions(s).map(o=>o.teamId),[s.teamId]);
+      const unavailable=core.TEAMS.find(t=>t.leagueId===s.leagueId&&t.id!==s.teamId).id;
+      assert.throws(()=>core.nextSeason(s,unavailable));
+      s=core.nextSeason(s,s.teamId);
       assert.equal(s.contract.yearsLeft,remaining);
       assert.equal(s.salary,salary);
       assert.equal(s.contract.annualSalary,salary);

@@ -13,7 +13,7 @@ function tradeFixture({leagueId='kbo',years=1,rating=30,rebuild=false}={}){
  for(let seed=1;seed<=32;seed++){
   let s=D.createCareer({name:'이적 협의',role:'batter',entry:'pro',leagueId,seed,...(rebuild?{teamId:'kbo-kiwoom'}:{})});
   for(const key of Object.keys(s.attrs))s.attrs[key]=s.potential.caps[key]=rating;
-  s.contract.yearsLeft=years;s=finish(s);
+  s=finish(s);s=D.nextSeason(s,s.teamId);s.contract.yearsLeft=years;s=finish(s);
   const status=D.getTradeStatus(s);if(status.offers.length&&(!rebuild||status.offers.some(o=>o.reason.includes('하위권'))))return s;
  }
  throw new Error('No trade fixture: '+JSON.stringify({leagueId,years,rating,rebuild}));
@@ -65,14 +65,13 @@ test('세 리그의 트레이드는 같은 리그 안에서만 이동하며 잔�
  }
 });
 
-test('하위권 전력 재편과 출전 부족이 협의를 만들고 거절·재접속으로 재추첨하지 않는다',()=>{
+test('하위권 전력 재편과 출전 부족이 협의를 만들고 일반 거부권 없이 구단 결정으로 이동한다',()=>{
  const rebuilding=tradeFixture({rating:80,rebuild:true});assert.match(D.getTradeStatus(rebuilding).context,/전력 재편/);
  assert.ok(D.getTradeStatus(rebuilding).offers.some(o=>o.reason.includes('하위권')));
  const s=tradeFixture(),offers=D.getTradeStatus(s).offers;assert.match(D.getTradeStatus(s).context,/출전 기회/);
  assert.deepEqual(offers,D.getTradeStatus(D.validateSave(clone(s))).offers);
- let rejected=s;for(const offer of offers)rejected=D.declineTrade(rejected,offer.teamId);
- assert.deepEqual(D.getTradeStatus(rejected).offers,[]);assert.throws(()=>D.nextSeason(rejected,offers[0].teamId,1,false,'trade'));assert.throws(()=>D.declineTrade(rejected,offers[0].teamId));
- const stayed=D.nextSeason(rejected,rejected.teamId);assert.deepEqual(stayed.mobility.declinedTrades,[]);
+ assert.equal(offers.length,1);assert.equal(D.getTradeStatus(s).requiresConsent,false);assert.throws(()=>D.declineTrade(s,offers[0].teamId),/거부권/);
+ const next=D.nextSeason(s,s.teamId);assert.equal(next.teamId,offers[0].teamId);assert.deepEqual(next.mobility.declinedTrades,[]);
 });
 
 test('기존 저장의 능력·기록·자산을 보존하며 진로 필드의 잘못된 값을 거부한다',()=>{
@@ -98,6 +97,6 @@ test('아이템 목록은 구매·사용·화면 이동 후 펼침을 유지하�
 test('졸업·트레이드 화면의 선택 버튼이 실제 다음 시즌과 저장에 연결된다',async()=>{
  const graduate=school({plan:'domestic'}),u=ui(graduate);await u.click({draftPlan:'overseas'});assert.match(u.html(),/해외 진출 선택/);
  let saved=D.validateSave(JSON.parse(u.store.get('dugout.career.v1')));const overseas=D.getGraduationOffers(saved)[0];await u.click({overseas:overseas.teamId});saved=D.validateSave(JSON.parse(u.store.get('dugout.career.v1')));assert.equal(saved.teamId,overseas.teamId);
- const traded=tradeFixture({years:3}),v=ui(traded),offer=D.getTradeStatus(traded).offers[0];assert.match(v.html(),/협의 수락 · 이적/);await v.click({trade:offer.teamId,tradeYears:String(offer.years[0])});
+ const traded=tradeFixture({years:3}),v=ui(traded),offer=D.getTradeStatus(traded).offers[0];assert.match(v.html(),/통보 확인 · 새 팀 합류/);assert.doesNotMatch(v.html(),/data-decline-trade/);await v.click({trade:offer.teamId,tradeYears:String(offer.years[0])});
  const next=D.validateSave(JSON.parse(v.store.get('dugout.career.v1')));assert.equal(next.teamId,offer.teamId);assert.equal(next.contract.yearsLeft,2);
 });
