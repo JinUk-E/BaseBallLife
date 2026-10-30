@@ -109,5 +109,6 @@ test('화면에서 사회인 무대 선택·입단·경력 확인·개인훈련 
  const click=dataset=>events.click({target:{closest:()=>({dataset})}}),state=()=>D.validateSave(JSON.parse(store.get('dugout.career.v1'))),html=()=>elements.get('main').innerHTML;
  assert.match(html(),/독립리그 · 일본 사회인 트라이아웃/);events.change({target:{id:'alternative-league',value:'jaba-company'}});assert.match(html(),/가상 채용/);
  const target=offer(saved,'jaba-company');await click({alternativeJoin:target.teamId});assert.equal(state().amateur.alternative.teamId,target.teamId);assert.match(html(),/NPB 재계약 제한 2시즌/);
+  await click({view:'league'});assert.match(html(),/새 무대의 경기와 순위/);assert.match(html(),/JABA 사회인/);
  await click({view:'records'});assert.match(html(),/독립·사회인 경력/);await click({view:'home'});await click({action:'leave-alternative'});assert.equal(state().amateur.alternative,null);assert.ok(state().amateur.jabaSince);assert.equal(state().amateur.alternativeHistory.length,1);
 });
