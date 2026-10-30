@@ -44,6 +44,12 @@ test('CIF-SS D1 풀 대회는 2패 탈락·2승 진출·무패팀 3라운드 휴
  assert.deepEqual([...seen].sort(),['bye','eliminated','recovery']);
 });
 
+test('주요 대회에 출전한 주는 지역 경기 0경기와 출전 대기 안내를 혼동하지 않는다',()=>{
+ let s=D.createCareer({name:'대회 주간',role:'batter',schoolCountry:'jp',seed:3});while(s.week<22)s=s.pendingEvent?D.resolveEvent(s,s.pendingEvent.choices.at(-1).id):D.advanceWeek(s,'balanced');if(s.pendingEvent)s=D.resolveEvent(s,s.pendingEvent.choices.at(-1).id);s=D.advanceWeek(s,'balanced');
+ assert.equal(s.lastWeek.gamesPlayed,0);assert.ok(s.amateur.schoolCups.some(c=>c.id==='summer'&&c.results.some(r=>r.stats.g)));
+ assert.match(s.lastWeek.summary.join(' '),/지역·연습/);assert.doesNotMatch(s.lastWeek.summary.join(' '),/출전하지 못해도/);D.validateSave(s);
+});
+
 test('독립·사회인 입단은 소급 기록 없이 별도 경기를 치르고 주요 프로 서비스·통산을 보존한다',()=>{
  for(const role of ['batter','pitcher']){
   const s=unsigned(role),before=JSON.stringify(s);
