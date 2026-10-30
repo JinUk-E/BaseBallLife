@@ -54,7 +54,16 @@
     ['garden','마당 있는 집','home',60000,'햇볕과 작은 정원이 있는 주택.'],
     ['vacation','바닷가 별장','home',90000,'시즌이 끝나면 찾아갈 바닷가의 집.'],
     ['penthouse','펜트하우스','home',180000,'도시의 야경이 내려다보이는 집.'],
-    ['villa','개인 훈련장 주택','home',250000,'넓은 운동 공간을 갖춘 오랜 꿈의 집.']
+    ['villa','개인 훈련장 주택','home',250000,'넓은 운동 공간을 갖춘 오랜 꿈의 집.'],
+    ['pitching-robot','절대 안 봐주는 피칭머신','training',900,'몸쪽 승부에 인간적인 배려가 전혀 없다.'],
+    ['gold-bat','순금 배트 (경기 사용 불가)','luxury',2500,'타격감보다 중량감. 감독님께는 들키지 말자.'],
+    ['coffee-truck','구장 앞 커피차','luxury',1800,'팬 서비스인 줄 알았는데 사장님이 선수 본인이다.'],
+    ['supercar','문이 위로 열리는 슈퍼카','luxury',25000,'하차 장면만큼은 이미 올스타전 선발이다.'],
+    ['yacht','초호화 요트','luxury',1200000,'홈구장은 있는데 모항까지 생겼다. 선장님은 별도 섭외.'],
+    ['bullpen-sofa','불펜보다 편한 리클라이너','home',350,'감독님 전화만 안 오면 완벽한 휴식 공간.'],
+    ['hangang','한강뷰 아파트','home',450000,'한강이 보인다. 이제 원정 숙소에서도 이 집 생각만 난다.'],
+    ['rooftop-bullpen','옥상에 불펜 있는 펜트하우스','home',800000,'엘리베이터를 타고 등판한다. 층간소음은 별도 문제.'],
+    ['island','나만의 무인도','home',2000000,'개인훈련은 가능하지만 공이 바다로 가면 직접 주워야 한다.']
   ].map(([id,name,category,price,description])=>({id,name,category,price,description}));
   function lifeEffects(s) {
     const effects={growth:1,recovery:0,morale:0};
@@ -69,15 +78,18 @@
   }
   function getLifeShop(s) {
     const owned=new Set(s.life.owned.map(i=>i.id));
-    const offers=['training','luxury','home'].flatMap(category=>LIFE_ITEMS.filter(i=>i.category===category&&!owned.has(i.id))
-      .sort((a,b)=>seedValue(s.id+':shop:'+s.season+':'+s.week+':'+a.id)-seedValue(s.id+':shop:'+s.season+':'+s.week+':'+b.id)).slice(0,2));
-    return {balance:Math.max(0,Math.floor(s.totalSalary)+relocationIncome(s)-s.life.spent),spent:s.life.spent,offers:clone(offers),owned:s.life.owned.map(o=>({...LIFE_ITEMS.find(i=>i.id===o.id),season:o.season,week:o.week}))};
+    const purchased=s.life.owned.some(i=>i.season===s.season&&i.week===s.week);
+    const offers=purchased?[]:LIFE_ITEMS.filter(i=>!owned.has(i.id))
+      .sort((a,b)=>seedValue(s.id+':shop:'+s.season+':'+s.week+':'+a.id)-seedValue(s.id+':shop:'+s.season+':'+s.week+':'+b.id)).slice(0,1);
+    return {balance:Math.max(0,Math.floor(s.totalSalary)+relocationIncome(s)-s.life.spent),spent:s.life.spent,purchased,offers:clone(offers),owned:s.life.owned.map(o=>({...LIFE_ITEMS.find(i=>i.id===o.id),season:o.season,week:o.week}))};
   }
   function buyLifeItem(input,id) {
     const s=validateSave(input);
     if(s.stage!=='pro'||s.phase==='retired')fail('프로 선수로 활동 중일 때 구매할 수 있습니다.');
     if(s.life.owned.some(o=>o.id===id))fail('이미 보유한 물건입니다.');
-    const shop=getLifeShop(s),item=shop.offers.find(i=>i.id===id);
+    const shop=getLifeShop(s);
+    if(shop.purchased)fail('이번 주에는 이미 구매했습니다. 다음 주에 새 매물을 확인해 주세요.');
+    const item=shop.offers.find(i=>i.id===id);
     if(!item)fail('현재 진열된 물건을 선택해 주세요.');
     if(shop.balance<item.price)fail('보유한 돈이 부족합니다.');
     s.life.owned.push({id,price:item.price,season:s.season,week:s.week,quality:1+seedValue(s.id+':life:'+id)%100});

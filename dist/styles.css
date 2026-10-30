@@ -42,4 +42,5 @@ select{display:block;width:100%;min-width:0;border:1px solid var(--line);backgro
 .alternative-card details{margin:16px 0}
 .alternative-card a{font-size:12px;color:var(--green)}
 .alternative-card .career-offer strong{overflow-wrap:anywhere}
+.weekly-life{margin-top:12px}.weekly-life .life-item{max-width:680px}.weekly-life .life-item h3{overflow-wrap:anywhere}
 @media(max-width:680px){.pathway-cups article>div{align-items:flex-start;flex-direction:column}.alternative-card .scout-actions{flex-wrap:wrap}}
