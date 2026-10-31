@@ -1,6 +1,7 @@
 (function () {
   'use strict';
   const D = window.Dugout;
+  const R = window.DugoutRecap;
   const main = document.getElementById('main');
   if (!D) { main.innerHTML = '<div class="card"><h1>게임 파일을 불러오지 못했습니다.</h1><p>index.html과 core.js가 같은 폴더에 있는지 확인해 주세요.</p></div>'; return; }
   const SAVE = 'dugout.career.v1';
@@ -9,6 +10,7 @@
   let transferLeague = 'kbo', transferTeam = '', legacyBackup = null, backupV2 = null, contractYears = 1, scheduleMonth = '', postingTeam = '', postingYears = 3;
   let toastTimer;
   let alternativeLeague='gg';
+  let recapIndex=0,recapMode='story',recapPlaying=false,recapTimer=null,recapTouch=null;
   let suppliesOpen=true;try{suppliesOpen=localStorage.getItem('dugout.supplies.open.v1')!=='false';}catch{}
   let theme='default';try{theme=localStorage.getItem('dugout.theme.v1')||'default';}catch{}
   const THEME_COLORS={default:['#153d32','#e9ce75'],'kbo-lg':['#70182f','#f3b5c8'],'kbo-doosan':['#16233f','#e9c876'],'kbo-ssg':['#9b1936','#f5d3a4'],'kbo-kiwoom':['#601033','#e5c2aa'],'kbo-kt':['#25282e','#f2b5b9'],'kbo-hanwha':['#813a13','#ffcf91'],'kbo-kia':['#991f2c','#f4d0a8'],'kbo-samsung':['#15448e','#c0dbff'],'kbo-lotte':['#173a62','#e9a8af'],'kbo-nc':['#214c65','#d9bf7b']};
@@ -79,7 +81,7 @@
     try { localStorage.setItem(SAVE+'.backup-v'+version,raw); }
     catch { toast('이전 저장 원본을 저장 메뉴에서 파일로 내보내 주세요.'); }
   }
-  function commit(next) { state = next; persist(); render(); }
+  function commit(next) { if(state?.id!==next.id||state?.phase!=='retired'&&next.phase==='retired'){recapIndex=0;recapMode='story';recapPlaying=false;}state = next; persist(); render(); }
   function title(label, description, extra = '') {
     return '<div class="page-title"><div><div class="eyebrow">YOUR BASEBALL STORY</div><h1>' + label + '</h1><p>' + description + '</p></div>' + extra + '</div>';
   }
@@ -268,9 +270,60 @@
   function timeline() {
     return title('기록 사이에 남은 순간들.','당신의 선택으로 만들어진 커리어를 돌아보세요.')+'<section class="card"><div class="timeline">'+[...state.history].reverse().map(h=>'<article class="timeline-entry"><time>SEASON '+String(h.season).padStart(2,'0')+' · WEEK '+String(h.week).padStart(2,'0')+'</time><h3>'+esc(h.title)+'</h3><p>'+esc(h.text)+'</p></article>').join('')+'</div></section>';
   }
+  function recapPanel() {
+    if(!R)return '';
+    const cards=R.build(state);recapIndex=Math.min(recapIndex,cards.length-1);
+    const colors=THEME_COLORS[theme]||THEME_COLORS.default;
+    return `<section class="career-recap" aria-label="은퇴 커리어 리캡"><header class="recap-heading"><div><div class="eyebrow">YOUR CAREER, IN STORIES</div><h1>나의 야구, 한 편의 이야기.</h1><p>${esc(state.name)}의 첫 유니폼부터 마지막 시즌까지.</p></div><button class="secondary" data-action="recap-mode">${recapMode==='story'?'전체 모아보기':'한 장씩 보기'}</button></header>${recapMode==='story'?`<div class="recap-story"><div class="recap-progress" aria-label="카드 선택">${cards.map((c,i)=>`<button data-recap-index="${i}" aria-label="${i+1}번 카드 · ${esc(c.title.replace(/\n/g,' '))}" ${i===recapIndex?'aria-current="step"':''}><span></span></button>`).join('')}</div><div class="recap-frame" id="recap-frame" tabindex="0" aria-label="리캡 카드. 왼쪽·오른쪽 방향키 또는 좌우 스와이프로 넘기기">${R.html(cards[recapIndex],colors)}</div><div class="recap-controls"><button class="secondary" data-action="recap-prev" aria-label="이전 카드" ${recapIndex===0?'disabled':''}>←</button><span class="recap-counter" role="status" aria-live="polite">${recapIndex+1} / ${cards.length}</span><button class="secondary" data-action="recap-next" aria-label="다음 카드" ${recapIndex===cards.length-1?'disabled':''}>→</button><button class="secondary" data-action="recap-play">${recapPlaying?'일시정지':'자동 넘기기'}</button><button class="primary" data-action="recap-download">${icon('download')}이 카드 저장</button></div><p class="recap-hint">좌우로 넘겨 보세요 · 저장하면 1080 × 1920 PNG 이미지로 남습니다.</p></div>`:`<div class="recap-gallery">${cards.map((c,i)=>`<div>${R.html(c,colors)}<button class="secondary full" data-recap-index="${i}">${i+1}번 카드 크게 보기</button></div>`).join('')}</div>`}</section>`;
+  }
+  function syncRecap() {
+    clearTimeout(recapTimer);recapTimer=null;
+    if(!R||!state||state.phase!=='retired'||view!=='home'||recapMode!=='story'){recapPlaying=false;return;}
+    if(recapPlaying)recapTimer=setTimeout(()=>{
+      if(document.hidden){recapPlaying=false;render();return;}
+      const total=R.build(state).length;
+      if(recapIndex<total-1)recapIndex++;
+      if(recapIndex===total-1)recapPlaying=false;
+      render();
+    },6500);
+  }
+  function moveRecap(delta) {
+    if(!R||state?.phase!=='retired')return;
+    recapPlaying=false;recapIndex=Math.max(0,Math.min(R.build(state).length-1,recapIndex+delta));render();
+    document.getElementById('recap-frame')?.focus?.({preventScroll:true});
+  }
+  async function downloadRecap() {
+    if(!R||state?.phase!=='retired')return;
+    recapPlaying=false;syncRecap();
+    const card=R.build(state)[recapIndex],source=R.svg(card,THEME_COLORS[theme]||THEME_COLORS.default);
+    const url=URL.createObjectURL(new Blob([source],{type:'image/svg+xml;charset=utf-8'}));
+    try {
+      await document.fonts?.ready;
+      const img=new Image();await new Promise((resolve,reject)=>{img.onload=resolve;img.onerror=()=>reject(new Error('카드 이미지를 준비하지 못했습니다. 다시 시도해 주세요.'));img.src=url;});
+      const canvas=document.createElement('canvas');canvas.width=1080;canvas.height=1920;canvas.getContext('2d').drawImage(img,0,0);
+      const blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/png'));
+      if(!blob)throw new Error('이미지를 저장하지 못했습니다. 다시 시도해 주세요.');
+      const png=URL.createObjectURL(blob),link=document.createElement('a');
+      link.href=png;link.download='dugout-'+card.name.replace(/[^\p{L}\p{N}_-]/gu,'_')+'-recap-'+String(card.index+1).padStart(2,'0')+'.png';document.body.appendChild(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(png),30000);
+      toast('카드를 이미지로 저장했습니다. 모바일에서는 다운로드 목록을 확인해 주세요.');
+    } finally {URL.revokeObjectURL(url);render();}
+  }
+  document.addEventListener('keydown',e=>{
+    if(!e.target.closest?.('#recap-frame'))return;
+    if(e.key==='ArrowLeft'||e.key==='ArrowRight'){e.preventDefault();moveRecap(e.key==='ArrowLeft'?-1:1);}
+  });
+  document.addEventListener('touchstart',e=>{
+    recapTouch=e.target.closest?.('#recap-frame')&&e.touches.length===1?{x:e.touches[0].clientX,y:e.touches[0].clientY}:null;
+  },{passive:true});
+  document.addEventListener('touchend',e=>{
+    if(!recapTouch||!e.changedTouches.length)return;
+    const dx=e.changedTouches[0].clientX-recapTouch.x,dy=e.changedTouches[0].clientY-recapTouch.y;recapTouch=null;
+    if(Math.abs(dx)>50&&Math.abs(dx)>Math.abs(dy)*1.4)moveRecap(dx>0?-1:1);
+  },{passive:true});
+  document.addEventListener('visibilitychange',()=>{if(document.hidden&&recapPlaying){recapPlaying=false;render();}});
   function retired() {
     const ending=D.getCareerAssessment(state);
-    return `<div class="grid-gap"><section class="season-end-banner retired-card"><div class="eyebrow">YOUR BASEBALL LIFE</div><h1>${esc(ending.title)}</h1><p>${esc(state.name)} · ${state.age}세 은퇴 · 프로 ${state.careerStats.g}경기</p><p>${esc(ending.description)}</p><div class="retired-actions"><button class="primary gold" data-action="export">커리어 보관 ${icon('download')}</button><button class="secondary" data-action="new">새 선수 시작</button></div></section><section class="card"><h2>리그마다 남긴 발자취</h2>${ending.played.map(l=>`<div class="ending-row"><div><strong>${esc(l.title)}</strong><p class="small muted">${l.seasons}시즌 · ${l.stats.g}경기 · ${state.role==='batter'?l.stats.h+'안타 · '+l.stats.hr+'홈런':l.stats.w+'승 · '+l.stats.so+'K · '+l.stats.sv+'세이브 · '+l.stats.hld+'홀드'}${l.awards?' · 사이영상 '+l.awards+'회':''}</p></div></div>`).join('')||'<p>프로 무대를 향한 도전으로 남았습니다.</p>'}<p class="table-note">게임 기록에 따른 평가입니다. 실제 구단의 영구결번이나 명예의 전당 투표를 재현하지 않습니다.</p></section>${statStrip(state.careerStats)}<section class="card"><div class="card-head"><h2>커리어 북</h2><button class="text-button" data-view="timeline">연표 보기 ${icon('arrow')}</button></div><div class="record-detail"><div><span>최종 종합 능력</span><strong>${D.overall(state)}</strong></div><div><span>누적 연봉</span><strong>${lifeMoney(Math.floor(state.totalSalary))}</strong></div></div></section></div>`;
+    return recapPanel()+`<div class="grid-gap"><section class="season-end-banner retired-card"><div class="eyebrow">YOUR BASEBALL LIFE</div><h1>${esc(ending.title)}</h1><p>${esc(state.name)} · ${state.age}세 은퇴 · 프로 ${state.careerStats.g}경기</p><p>${esc(ending.description)}</p><div class="retired-actions"><button class="primary gold" data-action="export">커리어 보관 ${icon('download')}</button><button class="secondary" data-action="new">새 선수 시작</button></div></section><section class="card"><h2>리그마다 남긴 발자취</h2>${ending.played.map(l=>`<div class="ending-row"><div><strong>${esc(l.title)}</strong><p class="small muted">${l.seasons}시즌 · ${l.stats.g}경기 · ${state.role==='batter'?l.stats.h+'안타 · '+l.stats.hr+'홈런':l.stats.w+'승 · '+l.stats.so+'K · '+l.stats.sv+'세이브 · '+l.stats.hld+'홀드'}${l.awards?' · 사이영상 '+l.awards+'회':''}</p></div></div>`).join('')||'<p>프로 무대를 향한 도전으로 남았습니다.</p>'}<p class="table-note">게임 기록에 따른 평가입니다. 실제 구단의 영구결번이나 명예의 전당 투표를 재현하지 않습니다.</p></section>${statStrip(state.careerStats)}<section class="card"><div class="card-head"><h2>커리어 북</h2><button class="text-button" data-view="timeline">연표 보기 ${icon('arrow')}</button></div><div class="record-detail"><div><span>최종 종합 능력</span><strong>${D.overall(state)}</strong></div><div><span>누적 연봉</span><strong>${lifeMoney(Math.floor(state.totalSalary))}</strong></div></div></section></div>`;
   }
   function render() {
     const supplies=document.querySelector?.('.point-supplies');if(supplies)suppliesOpen=supplies.open;
@@ -280,6 +333,7 @@
     applyTheme();
     const save = document.getElementById('save-status'); save.innerHTML = '<i></i>'+ (storageError?'자동 저장 확인 필요':state?'진행 상황 자동 저장':'기기 자동 저장'); save.classList.toggle('error',storageError);
     if (!state) main.innerHTML=intro(); else main.innerHTML=({home,records,development,life,league,timeline}[view])();
+    syncRecap();
   }
   function showDialog(heading, content) {
     const dialog = document.getElementById('dialog');
@@ -327,6 +381,7 @@
   document.addEventListener('click', async e => {
     const el=e.target.closest('button');if(!el||el.disabled||busy)return;
     try {
+      if(el.dataset.recapIndex!==undefined&&R&&state?.phase==='retired'){recapPlaying=false;recapIndex=Math.max(0,Math.min(R.build(state).length-1,Number(el.dataset.recapIndex)||0));const wasGallery=recapMode==='gallery';recapMode='story';render();if(wasGallery)scrollTop();return;}
       if(el.dataset.view){if(!state){toast('선수를 등록하면 기록과 순위를 확인할 수 있습니다.');return;}view=el.dataset.view;render();scrollTop();return;}
       if(el.dataset.schoolCountry){creation.schoolCountry=el.dataset.schoolCountry;render();return;}
       if(el.dataset.scoutResponse){commit(D.respondToScout(state,el.dataset.scoutResponse));toast('관찰 소식에 응답했습니다.');return;}
@@ -353,6 +408,11 @@
       if(el.dataset.posting){plan='balanced';scheduleMonth='';commit(D.nextSeason(state,el.dataset.posting,Number(el.dataset.postingYears),false,'posting'));scrollTop();toast('포스팅 계약 완료! MLB에서 새 시즌을 시작합니다.');return;}
       if(el.dataset.contract){plan='balanced';scheduleMonth='';commit(D.nextSeason(state,el.dataset.contract,Number(el.dataset.contractYears||1)));scrollTop();toast(state.stage==='highschool'?'새 학년이 시작됐습니다.':'새 시즌을 시작합니다. 연봉 '+money(state.salary));return;}
       switch(el.dataset.action){
+        case 'recap-prev':moveRecap(-1);break;
+        case 'recap-next':moveRecap(1);break;
+        case 'recap-mode':recapPlaying=false;recapMode=recapMode==='story'?'gallery':'story';render();break;
+        case 'recap-play':if(R&&state?.phase==='retired'){if(recapIndex===R.build(state).length-1)recapIndex=0;recapPlaying=!recapPlaying;render();}break;
+        case 'recap-download':await downloadRecap();break;
         case 'leave-alternative':commit(D.leaveAlternative(state));toast('개인훈련으로 전환했습니다. 경기 기록과 JABA 등록 제한은 유지됩니다.');break;
         case 'advance-one':case 'advance-key':case 'advance': {
           busy=true;render();await new Promise(r=>setTimeout(r,0));
