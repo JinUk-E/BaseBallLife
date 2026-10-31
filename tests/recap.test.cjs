@@ -69,6 +69,7 @@ test('리캡 넘기기·모아보기·자동재생은 저장을 변경하지 않
   vm.runInNewContext(fs.readFileSync(require.resolve('../dist/app.js'),'utf8'),{window:{Dugout:D,DugoutRecap:R,scrollTo(){}},document,Blob,URL:{createObjectURL:()=> 'blob:recap',revokeObjectURL(){}},Image:class{set src(v){Promise.resolve().then(()=>this.onload());}},localStorage:{getItem:k=>store.get(k)||null,setItem:(k,v)=>store.set(k,v)},JSON,setTimeout(fn,ms){timers.set(++serial,{fn,ms});return serial;},clearTimeout:id=>timers.delete(id),matchMedia:()=>({matches:true})});
   const click=dataset=>events.click({target:{closest:()=>({dataset})}}),html=()=>elements.get('main').innerHTML,before=store.get('dugout.career.v1');
   assert.match(html(),/은퇴 커리어 리캡/);assert.match(html(),/마지막 아웃 뒤/);
+  assert.match(html(),/팬들의 이야기/);assert.match(html(),/게임 속 가상 반응/);assert.match(html(),/은퇴 소식/);
   await click({action:'recap-next'});assert.match(html(),/아무도 몰랐던/);
   await click({action:'recap-mode'});assert.match(html(),/recap-gallery/);
   await click({recapIndex:'2'});assert.match(html(),/꿈꾸던 무대에/);assert.ok(!html().includes('recap-gallery'));
