@@ -43,6 +43,11 @@
     if(distinct.length){
       add({id:'uniforms',tone:'paper',eyebrow:'04 · DIFFERENT COLORS, SAME NAME',title:distinct.length>1?'유니폼은 달라도,\n이름은 하나.':played.length>=5?'오래 입은 유니폼,\n쌓여 간 이름.':'처음 품은 유니폼,\n남겨진 내 이름.',hero:String(distinct.length),heroLabel:'함께한 주요 프로 구단',subtitle:`${leagueCount}개 프로 리그 · 출전한 ${played.length}시즌`,lines:distinct.slice(0,4).map(id=>teamName(s,id)),footnote:distinct.length>4?`그리고 ${distinct.length-4}개 구단에 남긴 발자취.`:'이적 시즌의 개인 기록은 시즌 전체 합계로 기억합니다.'});
     }
+    const turningPoints=s.history.filter(h=>/프로 입단|포스팅 이적|해외 진출|트레이드 승인|프로 복귀|새로운 무대|FA 미아/.test(h.title));
+    if(turningPoints.length){
+      const moments=turningPoints.slice(-4);
+      add({id:'moments',tone:'paper',eyebrow:'THE MOMENTS THAT MADE ME',title:'선택의 순간들이\n나를 만들었다.',hero:String(turningPoints.length),heroLabel:'기록에 남은 커리어의 전환점',subtitle:'새로운 도전과 돌아온 기회. 지나온 순간을 다시 펼칩니다.',lines:moments.map(h=>`${year(s,h.season)} · ${h.title}`),footnote:turningPoints.length>4?'최근 전환점 4개 · 전체 내용은 커리어 연표에서 확인하세요.':'실제로 저장된 커리어 기록에서 골랐습니다.'});
+    }
     const alternatives=(s.amateur.alternativeHistory||[]).filter(a=>a.results.length),unsigned=rows.filter(r=>r.stage==='unattached');
     if(alternatives.length||unsigned.length){
       const names=[...new Set(alternatives.map(a=>D.PATHWAYS.club(a.teamId)?.name).filter(Boolean))];

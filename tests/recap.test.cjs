@@ -44,6 +44,12 @@ test('시즌 중 이적 구단과 실제 보유 소장품을 리캡에 남긴다
   assert.equal(clubs.hero,'2');assert.ok(clubs.lines.some(v=>v.includes('두산')));
   assert.deepEqual(cards.find(c=>c.id==='life').lines,['한강뷰 아파트']);
 });
+test('인생 이야기의 전환점은 실제 저장된 사건만 시간순으로 표시한다',()=>{
+  const s=retired();s.history.push({season:1,week:1,title:'트레이드 승인·공시',text:'이적',type:'contract'});
+  const card=R.build(s).find(c=>c.id==='moments');assert.ok(card);
+  assert.ok(card.lines.some(line=>line.includes('트레이드 승인·공시')));
+  assert.ok(!card.lines.some(line=>line.includes('사이영상')));
+});
 test('독립·사회인 재도전은 별도 경기 수와 실제 소속 이름으로 남는다',()=>{
   const s=retired(),id=D.PATHWAYS.LEAGUES[0].clubs[0].id;
   s.amateur.alternativeHistory=[{teamId:id,stats:{g:12},results:[{}]}];
