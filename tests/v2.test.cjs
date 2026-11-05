@@ -268,7 +268,7 @@ test('PitchingRoles_SeededSeasons_RespectAppearanceLimitsAndDecisionConservation
 
 test('Schedule_EachLeague_CompletesItsSeasonWithoutForeignOpponents', () => {
   for (const league of data.LEAGUES) {
-    const ids = data.TEAMS.filter(t => t.leagueId === league.id).map(t => t.id);
+    const ids = data.TEAMS.filter(t => t.leagueId === league.id).map(t => t.id).slice(0,league.id==='highschool'?8:undefined);
     let s = career({leagueId: league.id, teamId: ids[0],entry:league.id==='highschool'?'highschool':'pro'});
     assert.deepEqual([...s.scheduleTeamIds].sort(), [...ids].sort());
     while (s.phase === 'active') {

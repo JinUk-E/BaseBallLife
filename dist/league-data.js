@@ -32,6 +32,7 @@
     ].map(([id, name, short, color, strength, competition]) => Object.freeze({
       id: 'hs-' + id, name, short, color, strength, competition, leagueId: 'highschool', fictional: true
     })),
+    ...Array.from({length:56},(_,i)=>Object.freeze({id:'hs-extra-'+i,name:'고교 '+(i+9),short:'고교',color:'#6e8c78',strength:38+i%8,competition:35+i%8,leagueId:'highschool',fictional:true})),
     ...clubs('kbo', [
       ['lg', 'LG 트윈스', 'LG', '#dc456a', 68, 66],
       ['doosan', '두산 베어스', '두산', '#8696c9', 61, 58],

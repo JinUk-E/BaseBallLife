@@ -7,7 +7,7 @@ const schedules=require('../dist/schedule-data.js');
 test('Schedule_AllLeaguesAndFutureYears_ConserveGamesIncludingOddNPBSeason',()=>{
   for(const year of [2026,2027,2028,2050]){
     for(const [leagueId,perTeam] of [['highschool',28],['kbo',144],['npb',143],['mlb',162]]){
-      const expected=data.TEAMS.filter(t=>t.leagueId===leagueId).map(t=>t.id);
+      const expected=data.TEAMS.filter(t=>t.leagueId===leagueId).map(t=>t.id).slice(0,leagueId==='highschool'?8:undefined);
       const calendar=schedules.createSchedule(leagueId,year);
       assert.equal(calendar.gamesPerTeam,perTeam);
       const canceledMlb=leagueId==='mlb'&&year===2026;

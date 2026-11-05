@@ -560,7 +560,7 @@
   function createSchedule(leagueId, year = 2026, teamIds) {
     if (!Object.prototype.hasOwnProperty.call(GAMES_PER_TEAM, leagueId)) throw new Error('지원하지 않는 리그입니다.');
     if (!Number.isInteger(year) || year < 1900 || year > 2200) throw new Error('일정 연도가 올바르지 않습니다.');
-    const expected = Data.TEAMS.filter(t => t.leagueId === leagueId).map(t => t.id);
+    const expected = Data.TEAMS.filter(t => t.leagueId === leagueId).map(t => t.id).slice(0,leagueId==='highschool'?8:undefined);
     const ids = teamIds ? teamIds.slice() : expected.slice();
     if (ids.length !== expected.length || new Set(ids).size !== ids.length || ids.some(id => !expected.includes(id))) {
       throw new Error('전체 리그 구단이 필요합니다. 이전 8구단 저장 일정은 별도 경로를 사용하세요.');
